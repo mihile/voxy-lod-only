@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"lod_only_verification","version":"1","name":"LOD Only isolated verification","environment":"server","entrypoints":{"main":["dev.mihile.voxylodonly.verify.VerificationMod"]},"depends":{"voxy_lod_only":"*"}}

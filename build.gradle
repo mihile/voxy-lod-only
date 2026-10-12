@@ -1,0 +1,60 @@
+plugins { id 'fabric-loom' version '1.10.4' }
+version = project.mod_version
+group = 'dev.mihile'
+base { archivesName = 'VoxyLodOnly' }
+repositories { mavenCentral() }
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    modCompileOnly files('libs/voxy.jar', 'libs/voxyserver.jar')
+    testImplementation 'junit:junit:4.13.2'
+}
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand version: project.version }
+}
+tasks.withType(JavaCompile).configureEach { options.release = 17; options.encoding = 'UTF-8' }
+java { withSourcesJar() }
+jar { from('LICENSE') }
+sourceSets {
+    verification {
+        java.srcDir 'verification/harness/java'
+        resources.srcDir 'verification/harness/resources'
+        compileClasspath += sourceSets.main.compileClasspath + sourceSets.main.output
+        runtimeClasspath += compileClasspath
+    }
+    verificationClient {
+        java.srcDir 'verification/client/java'
+        resources.srcDir 'verification/client/resources'
+        compileClasspath += sourceSets.main.compileClasspath + sourceSets.main.output
+        runtimeClasspath += compileClasspath
+    }
+}
+tasks.register('verificationJar', Jar) {
+    dependsOn tasks.named('verificationClasses')
+    archiveFileName = 'lod-only-verification-dev.jar'
+    destinationDirectory = layout.buildDirectory.dir('verification')
+    from sourceSets.verification.output
+}
+tasks.register('remapVerificationJar', net.fabricmc.loom.task.RemapJarTask) {
+    dependsOn tasks.named('verificationJar')
+    inputFile = tasks.named('verificationJar').flatMap { it.archiveFile }
+    archiveFileName = 'lod-only-verification.jar'
+    destinationDirectory = layout.buildDirectory.dir('verification')
+    addNestedDependencies = false
+}
+tasks.register('verificationClientJar', Jar) {
+    dependsOn tasks.named('verificationClientClasses')
+    archiveFileName = 'lod-only-client-verification-dev.jar'
+    destinationDirectory = layout.buildDirectory.dir('verification')
+    from sourceSets.verificationClient.output
+}
+tasks.register('remapVerificationClientJar', net.fabricmc.loom.task.RemapJarTask) {
+    dependsOn tasks.named('verificationClientJar')
+    inputFile = tasks.named('verificationClientJar').flatMap { it.archiveFile }
+    archiveFileName = 'lod-only-client-verification.jar'
+    destinationDirectory = layout.buildDirectory.dir('verification')
+    addNestedDependencies = false
+}

@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"lod_only_client_verification","version":"1","name":"LOD Only isolated graphical verification","environment":"client","entrypoints":{"client":["dev.mihile.voxylodonly.verify.ClientVerification"]},"depends":{"voxyserver":"*","voxy":"*"}}
