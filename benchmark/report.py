@@ -60,6 +60,8 @@ for ax,(field,title,unit,scale) in zip(axes.flat,spec):
     ax.set_ylim(0,max(ax.get_ylim()[1],max(values)*1.18))
 fig.suptitle('Voxy LOD Only 0.1.0 vs Chunky 1.3.146\n289 chunks · 4 logical CPUs · 4 GiB max heap · 3 runs (median bars, individual dots)',fontsize=14)
 fig.savefig(out/'comparison.png',dpi=170);fig.savefig(out/'comparison.svg');plt.close(fig)
+svg_path = out/'comparison.svg'
+svg_path.write_text('\n'.join(line.rstrip() for line in svg_path.read_text(encoding='utf-8').splitlines())+'\n', encoding='utf-8')
 
 plain=next(s for s in summary if s['mode']=='chunky');fast=next(s for s in summary if s['mode']=='lod_throughput');default=next(s for s in summary if s['mode']=='lod_default')
 terrain_payload=statistics.median(run['region_stats']['target_compressed_payload_bytes'] for run in rows('chunky'))/MIB
