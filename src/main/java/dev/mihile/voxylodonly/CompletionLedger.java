@@ -33,7 +33,20 @@ public final class CompletionLedger {
             out.writeInt(MAGIC); out.writeLong(seed); out.writeInt(completed.size());
             for (long pos : completed.stream().sorted().toList()) out.writeLong(pos);
         }
-        try { Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
-        catch (AtomicMoveNotSupportedException e) { Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING); }
+        for (int attempt = 0; ; attempt++) {
+            try {
+                try { Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
+                catch (AtomicMoveNotSupportedException e) { Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING); }
+                break;
+            } catch (AccessDeniedException e) {
+                // Windows can temporarily hold the just-written file. Keep the previous
+                // checkpoint intact; never delete it to force an overwrite.
+                if (attempt >= 5) throw e;
+                try { Thread.sleep(20L << attempt); }
+                catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt(); throw new IOException("Interrupted checkpoint replacement", interrupted);
+                }
+            }
+        }
     }
 }

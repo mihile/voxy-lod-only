@@ -25,12 +25,14 @@ public final class LodOnlyManager {
     private final ServerLodEngine engine;
     private final LodOnlyConfig config;
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
-        Thread thread = new Thread(r, "Voxy LOD Only generator"); thread.setDaemon(true); return thread;
+        Thread thread = new Thread(r, "Voxy LOD Only coordinator"); thread.setDaemon(true); return thread;
     });
+    private final ExecutorService stages;
+    private final int generationThreads;
     private final Map<ServerLevel, Set<Long>> realChunks = new IdentityHashMap<>();
     private final Map<ServerLevel, CompletionLedger> ledgers = new IdentityHashMap<>();
     private Job job;
-    private CompletableFuture<InMemoryGenerator.Batch> pending;
+    private final Deque<CompletableFuture<InMemoryGenerator.Batch>> pending = new ArrayDeque<>();
     private InMemoryGenerator.Batch ready;
     private int chunkIndex, sectionIndex;
     private boolean stopping, automatic;
@@ -43,18 +45,24 @@ public final class LodOnlyManager {
         final TilePlan plan;
         final UUID owner;
         final AtomicBoolean cancelled = new AtomicBoolean();
-        Job(ServerLevel level, int x, int z, int radius, UUID owner) {
-            this.level = level; this.plan = new TilePlan(x, z, radius); this.owner = owner;
+        Job(ServerLevel level, int x, int z, int radius, UUID owner, int tileSize) {
+            this.level = level; this.plan = new TilePlan(x, z, radius, tileSize); this.owner = owner;
         }
     }
 
     public LodOnlyManager(MinecraftServer server, ServerLodEngine engine, LodOnlyConfig config) {
         this.server = server; this.engine = engine; this.config = config; this.automatic = config.automatic;
+        generationThreads = config.effectiveGenerationThreads();
+        stages = Executors.newFixedThreadPool(generationThreads, r -> {
+            Thread thread = new Thread(r, "Voxy LOD Only terrain"); thread.setDaemon(true); return thread;
+        });
+        VoxyLodOnly.LOGGER.info("LOD scheduler: terrainThreads={}, tileSize={}, inFlight={}, commitBudget={}ms",
+                generationThreads, config.generationTileSize, config.maxInFlightBatches, config.commitBudgetMillis);
     }
     public boolean generate(ServerLevel level, int x, int z, int radius) {
-        if (!config.enabled || stopping || job != null || pending != null || ready != null) return false;
+        if (!config.enabled || stopping || job != null || !pending.isEmpty() || ready != null) return false;
         realChunks.clear();
-        job = new Job(level, x, z, radius, null); return true;
+        job = new Job(level, x, z, radius, null, config.generationTileSize); return true;
     }
     public void automatic(boolean enabled) { automatic = enabled; if (!enabled && job != null && job.owner != null) cancel(); }
     public void markRealChunk(ServerLevel level, ChunkPos pos) {
@@ -83,23 +91,29 @@ public final class LodOnlyManager {
                 if (player == null || player.serverLevel() != job.level
                         || !job.plan.includes(player.chunkPosition().x, player.chunkPosition().z)) cancel();
             }
-            if (pending != null && pending.isDone()) {
+            if (job != null && job.cancelled.get()) ready = null;
+            if (ready == null && !pending.isEmpty() && pending.peekFirst().isDone()) {
                 try {
-                    var completed = pending.join();
+                    var completed = pending.removeFirst().join();
                     if (job != null && !job.cancelled.get()) { ready = completed; chunkIndex = sectionIndex = 0; }
                 } catch (CompletionException | CancellationException e) {
                     if (job != null && !job.cancelled.get()) throw e;
-                } finally { pending = null; }
+                }
             }
-            if (job != null && job.cancelled.get() && pending == null) { ready = null; job = null; }
+            if (job != null && job.cancelled.get()) {
+                if (pending.isEmpty()) job = null;
+                return;
+            }
             if (server.getAverageTickTime() > config.pauseAboveTickMillis || !engine.savingServiceRateLimiter.getAsBoolean()) return;
             if (ready != null) commit();
-            if (pending != null || ready != null || ticks < nextBatchTick) return;
+            if (pending.size() + (ready == null ? 0 : 1) >= config.maxInFlightBatches || ticks < nextBatchTick) return;
             if (job == null && automatic) findAutomaticJob();
             if (job == null) return;
-            // A single pending tile, a single worker, and a bounded number of scans per tick.
+            // Prefetch generation while the tick thread applies the previous batch. Total retained
+            // batches remain bounded, and a cancelled job drains before a new job takes the slot.
             for (int scan = 0; scan < 8 && job != null; scan++) {
                 if (!job.plan.hasNext()) {
+                    if (!pending.isEmpty() || ready != null) return;
                     VoxyLodOnly.LOGGER.info("LOD Only job finished: dimension={}, generated={}, skipped={}, sections={}",
                             job.level.dimension().location(), generated, skipped, sections);
                     job = null; nextBatchTick = ticks + config.cooldownTicks; return;
@@ -108,8 +122,8 @@ public final class LodOnlyManager {
                 Job current = job;
                 Map<Long, CompletableFuture<Optional<CompoundTag>>> reads = new LinkedHashMap<>();
                 var reader = (ChunkMapAccessor)current.level.getChunkSource().chunkMap;
-                for (int dz = 0; dz < InMemoryGenerator.TILE; dz++) for (int dx = 0; dx < InMemoryGenerator.TILE; dx++) {
-                    ChunkPos pos = new ChunkPos(tile.x() * InMemoryGenerator.TILE + dx, tile.z() * InMemoryGenerator.TILE + dz);
+                for (int dz = 0; dz < config.generationTileSize; dz++) for (int dx = 0; dx < config.generationTileSize; dx++) {
+                    ChunkPos pos = new ChunkPos(tile.x() * config.generationTileSize + dx, tile.z() * config.generationTileSize + dz);
                     if (!current.plan.includes(pos.x, pos.z) || !current.level.getWorldBorder().isWithinBounds(pos)) continue;
                     if (ledger(current.level).contains(pos.toLong()) || real(current.level, pos)) { skipped++; continue; }
                     // Vanilla RegionFileStorage.read creates an empty .mca even for an absent region.
@@ -120,13 +134,15 @@ public final class LodOnlyManager {
                             : CompletableFuture.completedFuture(Optional.empty()));
                 }
                 if (reads.isEmpty()) continue;
-                pending = CompletableFuture.allOf(reads.values().toArray(CompletableFuture[]::new)).thenApplyAsync(unused -> {
+                pending.addLast(CompletableFuture.allOf(reads.values().toArray(CompletableFuture[]::new)).thenApplyAsync(unused -> {
                     if (current.cancelled.get()) throw new CancellationException();
                     Set<Long> eligible = new HashSet<>();
                     for (var entry : reads.entrySet()) if (entry.getValue().join().isEmpty()) eligible.add(entry.getKey());
                     if (eligible.isEmpty()) return new InMemoryGenerator.Batch(tile.x(), tile.z(), List.of(), null);
-                    return new InMemoryGenerator(current.level, current.cancelled::get).generate(tile.x(), tile.z(), eligible, config.structures);
-                }, worker);
+                    return new InMemoryGenerator(current.level, current.cancelled::get, stages, generationThreads,
+                            config.generationTileSize).generate(tile.x(), tile.z(), eligible, config.structures);
+                }, worker));
+                nextBatchTick = ticks + config.cooldownTicks;
                 return;
             }
         } catch (RuntimeException e) {
@@ -160,14 +176,14 @@ public final class LodOnlyManager {
                     WorldUpdater.insertUpdate(world, section);
                     sections++;
                     // Yield between sections; do not run an entire terrain tile on the tick thread.
-                    if ((System.nanoTime() - started) > 3_000_000L) { sectionIndex++; return; }
+                    if ((System.nanoTime() - started) > config.commitBudgetMillis * 1_000_000L) { sectionIndex++; return; }
                 }
                 ledger(job.level).add(chunk.getPos().toLong());
                 generated++; finished++; chunkIndex++; sectionIndex = 0;
             } finally { world.releaseRef(); }
         }
         if (chunkIndex >= ready.output().size()) {
-            batches++; ready = null; nextBatchTick = ticks + config.cooldownTicks;
+            batches++; ready = null;
         }
     }
 
@@ -179,30 +195,37 @@ public final class LodOnlyManager {
             if (!config.dimensions.contains(level.dimension().location().toString())) continue;
             var pos = player.chunkPosition();
             realChunks.clear();
-            job = new Job(level, pos.x, pos.z, config.radiusChunks, player.getUUID());
+            job = new Job(level, pos.x, pos.z, config.radiusChunks, player.getUUID(), config.generationTileSize);
             return;
         }
     }
     public String status() {
-        return "Voxy LOD Only: automatic=" + automatic + ", state=" + (stopping ? "stopped" : pending != null ? "generating" : ready != null ? "committing" : job != null ? "scanning" : "idle")
-                + ", generated=" + generated + ", skipped=" + skipped + ", sections=" + sections + ", batches=" + batches + ", error=" + lastError;
+        return "Voxy LOD Only: automatic=" + automatic + ", state=" + (stopping ? "stopped" : !pending.isEmpty() ? "generating" : ready != null ? "committing" : job != null ? "scanning" : "idle")
+                + ", generated=" + generated + ", skipped=" + skipped + ", sections=" + sections + ", batches=" + batches
+                + ", inFlight=" + (pending.size() + (ready == null ? 0 : 1)) + ", terrainThreads=" + generationThreads + ", error=" + lastError;
     }
     public void cancel() {
         if (job != null) job.cancelled.set(true);
         ready = null;
-        if (pending == null) job = null;
+        if (pending.isEmpty()) job = null;
     }
     public void shutdown() {
         if (stopping) return;
         stopping = true; cancel(); worker.shutdown();
-        // Worker never waits for the tick thread or holds a Voxy engine reference.
-        try {
-            while (!worker.awaitTermination(1, TimeUnit.SECONDS)) {
-                VoxyLodOnly.LOGGER.info("Waiting for private LOD generation stage to drain");
-            }
-        } catch (InterruptedException e) { Thread.currentThread().interrupt(); worker.shutdownNow(); }
-        pending = null; ready = null; job = null;
+        // Keep the stage executor alive until its coordinator has drained every submitted stage.
+        drain(worker);
+        stages.shutdown(); drain(stages);
+        pending.clear(); ready = null; job = null;
         VoxyLodOnly.LOGGER.info("LOD Only generator stopped; no pending tile or Voxy references");
+    }
+    private void drain(ExecutorService executor) {
+        boolean interrupted = false;
+        for (;;) {
+            try { if (executor.awaitTermination(1, TimeUnit.SECONDS)) break; }
+            catch (InterruptedException e) { interrupted = true; }
+            VoxyLodOnly.LOGGER.info("Waiting for private LOD generation stage to drain");
+        }
+        if (interrupted) Thread.currentThread().interrupt();
     }
     public void saveCheckpoints() {
         for (var ledger : ledgers.values()) {

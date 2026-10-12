@@ -7,12 +7,30 @@ The upstream companion mods remain unchanged.
 
 ## Private generation domain
 
-A single worker allocates a 24×24 grid of ProtoChunks for each 4×4 output tile.
-The inner 8×8 terrain grid gets noise/surface/carvers. The inner 6×6 grid gets
+The coordinator allocates a private grid for each output tile (default 8×8;
+4×4 remains configurable). The default grid is 28×28 ProtoChunks, its inner
+12×12 terrain grid gets noise/surface/carvers, and its inner 10×10 grid gets
 decorations, including contributions into neighboring output chunks. An
 eight-chunk structure/carver halo surrounds terrain. Generator operations use
 a WorldGenRegion backed exclusively by this grid, and never advance to FULL
 or SPAWN. A local LevelLightEngine owns lighting queues and layers.
+
+A bounded stage executor processes independent chunks in parallel: structure
+starts/references, biomes, noise, surface and carvers. A barrier drains every
+task before advancing the generation stage, including on failure/cancellation.
+Decoration remains in stable z/x order because it writes to neighbor chunks;
+lighting also remains local and serial. Auto parallelism leaves one detected
+processor available, with a cap of eight stage workers. The coordinator uses
+a separate executor, so waiting for stage tasks cannot exhaust the stage pool.
+Vanilla asynchronous sub-stages use an inline executor inside their stage lane.
+Minecraft 1.20.1's NoiseBasedChunkGenerator otherwise ignores the supplied
+executor and uses Util.backgroundExecutor. A scoped argument modifier selects
+inline execution only while the private generation guard is active; normal
+chunk generation keeps its original executor. This prevents nested-pool waits
+and preserves the guard during the actual noise/biome computation.
+Vanilla ServerLevel's constructor initializes the shared structure-placement
+state before this manager is started; stage submission publishes the initialized
+state and private chunk grid to the workers.
 
 Vanilla WorldGenRegion's old-chunk query normally delegates to ChunkMap and
 IOWorker, which can create empty region files. PrivateRegion overrides that
@@ -24,6 +42,11 @@ WorldGenRegion's normal onBlockStateChange call would update the live POI store.
 A thread-scoped mixin suppresses that hook during private decorations. Live
 block writes, chunk acquisitions, and entity additions are rejected in the
 generation scope. This scope does not apply to normal gameplay threads.
+Guards are nested and established on each stage worker. During decorations,
+vanilla structure-entity lookups through ServerLevel.structureManager are
+redirected to the current private WorldGenRegion (e.g. swamp-hut cat checks).
+That region context is restored on scope exit; live-world acquisition remains
+rejected, and ordinary gameplay threads are unaffected.
 No global save cancellation, chunk-unsaved flag modification, or cache deletion
 is used. Mods bypassing these interfaces are outside the tested contract.
 
@@ -39,7 +62,8 @@ the current dimension's Voxy engine, converts one section at a time, computes
 mips and invokes WorldUpdater.insertUpdate. Existing Voxy save callbacks and
 VoxyServer dirty/presence callbacks then persist and stream the data.
 References are acquired/released inside the same tick call. Commits yield after
-approximately 3 ms between sections, subject to one conversion's runtime.
+the configured budget (default 3 ms) between sections, subject to one
+conversion's runtime. Voxy mapping/updates remain on the server tick thread.
 
 Existing disk chunks are not replaced by seed previews. Loaded chunks are
 checked when selecting candidates and on every commit tick. CHUNK_LOAD events
@@ -49,11 +73,15 @@ Markers cover individual completed chunks, not entire partially generated tiles.
 
 ## Cancellation and durability
 
-There is one pending tile/future, one ready tile, and no unbounded work queue.
+At most two batches, including the currently applied batch, are in flight;
+the limit can be reduced to one. Generation overlaps the previous batch's
+tick-thread application. Submission cooldown controls the producer rather than
+forcing an idle gap after every commit. There is no unbounded work queue.
 Cancellation drops pending commits and sets the current job's atomic flag.
 The private worker checks it between stages/chunks. An already-running vanilla
 async noise/biome stage drains before the worker terminates. A new job cannot
-reuse the slot until the old generation future completes.
+reuse the slot until all old batch futures drain. The coordinator drains its
+stage tasks before the stage executor shuts down.
 
 A high-priority MinecraftServer.stopServer HEAD hook drains the generator
 before Fabric calls VoxyServer's storage-shutdown callback. The worker owns

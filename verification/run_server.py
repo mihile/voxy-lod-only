@@ -1,6 +1,6 @@
 """Disposable production-mappings server tests; never uses a real game/world directory."""
 from pathlib import Path
-import json, shutil, subprocess, queue, threading, time, sys, re
+import json, shutil, subprocess, queue, threading, time, sys, re, os
 from datetime import datetime
 
 root = Path(__file__).resolve().parents[1]
@@ -13,14 +13,14 @@ for name in ['libraries', 'fabric-server-launch.jar', 'fabric-server-launcher.pr
     else: shutil.copy2(src, dst)
 (fixture/'mods').mkdir(); (fixture/'config').mkdir()
 for src in [root/'libs/voxy.jar', root/'libs/voxyserver.jar',
-            root/'build/libs/VoxyLodOnly-0.1.0+1.20.1.jar', root/'build/verification/lod-only-verification.jar',
+            root/'build/libs/VoxyLodOnly-0.2.0+1.20.1.jar', root/'build/verification/lod-only-verification.jar',
             next((template/'mods').glob('fabric-api-*.jar'))]: shutil.copy2(src, fixture/'mods'/src.name)
 (fixture/'eula.txt').write_text('eula=true\n')
 (fixture/'server.properties').write_text('server-ip=127.0.0.1\nserver-port=25587\nonline-mode=false\nlevel-name=verify-world\nlevel-seed=424242\nview-distance=2\nsimulation-distance=2\nmax-tick-time=180000\nspawn-protection=0\n')
 (fixture/'config/voxy-lod-only.json').write_text(json.dumps({'enabled':True,'automatic':False,'radiusChunks':32,'cooldownTicks':1,'commitChunksPerTick':1,'pauseAboveTickMillis':1000,'structures':True,'dimensions':['minecraft:overworld']}))
 (fixture/'config/voxyserver.json').write_text(json.dumps({'lodStreamRadius':32,'maxSectionsPerTickPerPlayer':100,'sectionsPerPacket':50,'generateOnChunkLoad':True,'generateOnChunkUnload':True,'tickInterval':5,'workerThreads':2,'dirtyTrackingEnabled':True,'dirtyTrackingInterval':20,'hashSyncEnabled':True}))
 (root/'build/verification-fixture.txt').write_text(str(fixture))
-java = r'C:\Program Files\Eclipse Adoptium\jdk-17.0.18.8-hotspot\bin\java.exe'
+java = os.environ.get('VOXY_LOD_TEST_JAVA', r'C:\Program Files\Eclipse Adoptium\jdk-17.0.18.8-hotspot\bin\java.exe')
 
 class Server:
     def __init__(self, phase):
@@ -43,6 +43,7 @@ class Server:
             try: line=self.queue.get(timeout=.5)
             except queue.Empty: continue
             if any(x in line for x in ['ERROR','Exception','LOD Only','VERIFY_','Done (']): print(line.rstrip(),flush=True)
+            if 'VERIFY_PARALLEL FAILURE' in line: raise RuntimeError(line)
             if pattern in line:return line
         self.command('voxylodonly status')
         raise TimeoutError(pattern)
@@ -57,6 +58,8 @@ class Server:
             except subprocess.TimeoutExpired:self.process.kill();self.process.wait();raise
         self.log.close()
         if self.process.returncode!=0:raise RuntimeError(f'exit {self.process.returncode}')
+        errors=[line for line in self.lines if '/ERROR]' in line]
+        if errors:raise RuntimeError('Server logged errors: '+''.join(errors))
 
 def remote_region_files():
     result=[]
@@ -70,6 +73,7 @@ server=None
 try:
     server=Server(1)
     server.command('lodonlytest guard');server.wait('VERIFY_GUARD PASS')
+    server.command('lodonlytest parallel');server.wait('VERIFY_PARALLEL_ALL PASS',240)
     assert 'generated=0' in server.job('minecraft:overworld',0,0,0)
     assert 'generated=9' in server.job('minecraft:overworld',128,128,1)
     assert 'generated=10' in server.job('minecraft:the_nether',128,128,0)

@@ -22,6 +22,11 @@ discarding an in-flight preview when the actual chunk is visited; completed
 negative-coordinate generation and its persistence.
 Assertions fail the runner if the checks do not pass.
 
+The parallel verifier compares every output voxel's block state, biome and
+sky/block light between one and three stage workers, for tile sizes 4 and 8
+in Overworld and Nether. This checks stage barriers and neighbor-write ordering;
+it does not establish arbitrary modded world-generation thread safety.
+
 `run_graphical.py` uses that fixture and creates a separate fresh Java 17
 graphical client. It generates LODs at chunk (256,256), teleports the viewer
 sixteen chunks west, and checks that the distant target is absent from vanilla

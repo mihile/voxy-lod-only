@@ -1,0 +1,77 @@
+[
+  {
+    "case": "old-graal",
+    "runs": 3,
+    "profiled": false,
+    "durable_seconds": 41.733824700000696,
+    "generation_seconds": 41.429855499998666,
+    "cpu_seconds": 48.59375,
+    "cpu_budget_percent": 29.02509256478426,
+    "peak_rss_gib": 2.4331893920898438,
+    "mean_mspt": 0.35752496525,
+    "seconds_range": [
+      41.13307250000071,
+      42.3696277999843
+    ]
+  },
+  {
+    "case": "new-graal",
+    "runs": 3,
+    "profiled": false,
+    "durable_seconds": 12.399686100019608,
+    "generation_seconds": 12.073087099997792,
+    "cpu_seconds": 38.453125,
+    "cpu_budget_percent": 78.01053385754827,
+    "peak_rss_gib": 2.3723602294921875,
+    "mean_mspt": 0.6442940083333333,
+    "seconds_range": [
+      12.197411200002534,
+      12.483290100004524
+    ]
+  },
+  {
+    "case": "new-graal-flags",
+    "runs": 3,
+    "profiled": false,
+    "durable_seconds": 12.89293390000239,
+    "generation_seconds": 12.56901609999477,
+    "cpu_seconds": 41.390625,
+    "cpu_budget_percent": 79.86635260273513,
+    "peak_rss_gib": 2.220325469970703,
+    "mean_mspt": 0.613429463076923,
+    "seconds_range": [
+      12.38886080001248,
+      13.872027300007176
+    ]
+  },
+  {
+    "case": "chunky-graal",
+    "runs": 3,
+    "profiled": false,
+    "durable_seconds": 6.566386099992087,
+    "generation_seconds": 5.880226600012975,
+    "cpu_seconds": 21.21875,
+    "cpu_budget_percent": 81.05299411289042,
+    "peak_rss_gib": 2.4129409790039062,
+    "mean_mspt": 2.53450635,
+    "seconds_range": [
+      6.424230599979637,
+      6.652099900005851
+    ]
+  },
+  {
+    "case": "new-graal-8cpu",
+    "runs": 1,
+    "profiled": true,
+    "durable_seconds": 8.228583299991442,
+    "generation_seconds": 7.904413299984299,
+    "cpu_seconds": 44.28125,
+    "cpu_budget_percent": 67.2674268243205,
+    "peak_rss_gib": 2.4482879638671875,
+    "mean_mspt": 0.49104026142857143,
+    "seconds_range": [
+      8.228583299991442,
+      8.228583299991442
+    ]
+  }
+]

@@ -2,6 +2,7 @@ package dev.mihile.voxylodonly.verify;
 
 import com.dripps.voxyserver.Voxyserver;
 import dev.mihile.voxylodonly.GenerationGuard;
+import dev.mihile.voxylodonly.InMemoryGenerator;
 import dev.mihile.voxylodonly.mixin.VoxyServerAccessor;
 import me.cortex.voxy.common.world.other.Mapper;
 import net.fabricmc.api.ModInitializer;
@@ -16,6 +17,48 @@ public class VerificationMod implements ModInitializer {
     @Override public void onInitialize() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) -> {
             var root = Commands.literal("lodonlytest").requires(source -> source.hasPermission(4));
+            root.then(Commands.literal("parallel").executes(ctx -> {
+                var server = ctx.getSource().getServer();
+                Thread checker = new Thread(() -> {
+                    var pool = java.util.concurrent.Executors.newFixedThreadPool(3);
+                    try {
+                        for (int tileSize : new int[]{4, 8}) for (var dimension : java.util.List.of(net.minecraft.world.level.Level.OVERWORLD, net.minecraft.world.level.Level.NETHER)) {
+                            var level = server.getLevel(dimension);
+                            var eligible = new java.util.HashSet<Long>();
+                            for (int z = 128; z < 128+tileSize; z++) for (int x = 128; x < 128+tileSize; x++)
+                                eligible.add(net.minecraft.world.level.ChunkPos.asLong(x, z));
+                            var serial = new InMemoryGenerator(level, () -> false, Runnable::run, 1, tileSize).generate(128/tileSize, 128/tileSize, eligible, true);
+                            var parallel = new InMemoryGenerator(level, () -> false, pool, 3, tileSize).generate(128/tileSize, 128/tileSize, eligible, true);
+                            if (serial.output().size() != tileSize*tileSize || parallel.output().size() != tileSize*tileSize) throw new IllegalStateException("Missing output");
+                            long checked = 0;
+                            for (int c = 0; c < tileSize*tileSize; c++) {
+                                var a = serial.output().get(c); var b = parallel.output().get(c);
+                                if (!a.getPos().equals(b.getPos())) throw new IllegalStateException("Changed output order");
+                                for (int s = 0; s < a.getSections().length; s++) {
+                                    var pa = a.getSection(s); var pb = b.getSection(s);
+                                    var pos = net.minecraft.core.SectionPos.of(a.getPos(), a.getMinSection()+s);
+                                    for (int y = 0; y < 16; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+                                        if (pa.getBlockState(x,y,z) != pb.getBlockState(x,y,z)
+                                                || !pa.getBiomes().get(x>>2,y>>2,z>>2).equals(pb.getBiomes().get(x>>2,y>>2,z>>2)))
+                                            throw new IllegalStateException("Parallel terrain mismatch at "+pos+":"+x+","+y+","+z);
+                                        for (var layer : net.minecraft.world.level.LightLayer.values()) {
+                                            var la=serial.light().getLayerListener(layer).getDataLayerData(pos);
+                                            var lb=parallel.light().getLayerListener(layer).getDataLayerData(pos);
+                                            if ((la==null?0:la.get(x,y,z)) != (lb==null?0:lb.get(x,y,z)))
+                                                throw new IllegalStateException("Parallel light mismatch at "+pos);
+                                        }
+                                        checked++;
+                                    }
+                                }
+                            }
+                            LoggerFactory.getLogger("lod_only_verification").info("VERIFY_PARALLEL dimension={} tileSize={} voxels={} PASS", dimension.location(), tileSize, checked);
+                        }
+                        LoggerFactory.getLogger("lod_only_verification").info("VERIFY_PARALLEL_ALL PASS");
+                    } catch (Throwable e) { LoggerFactory.getLogger("lod_only_verification").error("VERIFY_PARALLEL FAILURE",e); }
+                    finally { pool.shutdown(); }
+                }, "LOD parallel verifier");
+                checker.setDaemon(true); checker.start(); return 1;
+            }));
             root.then(Commands.literal("inspect").executes(ctx -> {
                 Voxyserver bridge = FabricLoader.getInstance().getEntrypoints("main", ModInitializer.class).stream()
                         .filter(Voxyserver.class::isInstance).map(Voxyserver.class::cast).findFirst().orElseThrow();

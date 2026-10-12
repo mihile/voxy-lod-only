@@ -70,3 +70,38 @@ improvements have not been established. This is an initial dedicated-server addo
 
 Raw reproducible evidence stays under the local project's ignored build/ folder;
 see verification/README.md for the scripts, result files and log locations.
+
+## 0.2.0 scheduler validation (2026-10-13)
+
+Artifact SHA-256: `58c10af86de838a6fd74a1eaab0c2c8532575f477ee2b1bd46a3cf584b7a4f28`.
+Build remains Java 17 bytecode; the server was tested on the supplied Oracle
+GraalVM 25.4.4.1.1+1.1 (Java 25.0.4.1.1), with the same Voxy/Fabric versions.
+
+- Build and nine JUnit policy tests: PASS. Added larger-tile coverage, nested
+  guards and replacement-checkpoint persistence tests.
+- Final five-phase GraalVM server fixture: `build/isolated-20261013-042159`.
+  `ALL_SERVER_TESTS PASS`; all five processes exited 0, without server errors.
+- Serial vs three-worker generation at tile sizes 4 and 8, Overworld and Nether:
+  all 13,107,200 output voxels matched in block state, biome, skylight and blocklight.
+- Existing chunk skip, private write/entity/loader guards, no remote vanilla
+  region files, Overworld/Nether LOD persistence, negative-coordinate checkpoint
+  restart, cancellation, stop with work in flight, normal block-save preservation,
+  and concurrent real-chunk visit priority: PASS.
+- The first GraalVM restart run exposed a transient Windows AccessDeniedException
+  replacing a checkpoint. The final artifact retries atomic replacement for a
+  bounded 620ms total backoff without deleting the old record; the clean rerun
+  above passed. LOD/world data were not deleted or moved to repair the failure.
+- NoiseExecutorMixin keeps private noise/biome work on owned stage lanes because
+  1.20.1 otherwise chooses Util.backgroundExecutor despite the passed executor.
+  Its argument modifier preserves the original executor outside private generation.
+- Final graphical integration: GraalVM 25.4 server + Java 17 Voxy client,
+  `GRAPHICAL_TEST PASS`, client/server exit 0. Nine manual previews; target absent
+  from vanilla client chunks but 127,271 distant non-air Voxy voxels present,
+  renderer identity/geometry/frame execution confirmed. Automatic generation
+  reached 200 previews total; after disconnect state=idle, inFlight=0, error=none.
+  No Network handle null/UNKNOWN cache initialization failure. Optional Iris was
+  absent and offline auth/Realms messages were expected. No pixel/FPS claim.
+
+Scheduler/JVM measurements and individual resource samples are documented in
+[the scheduler report](benchmark/SCHEDULER_REPORT.md). Intermediate build trials
+are kept locally but excluded from the final artifact's comparison table.

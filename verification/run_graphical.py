@@ -1,5 +1,5 @@
 from pathlib import Path
-import subprocess,threading,queue,time,shutil,json
+import subprocess,threading,queue,time,shutil,json,os
 from datetime import datetime
 root=Path(__file__).resolve().parents[1]
 fixture=Path((root/'build/verification-fixture.txt').read_text())
@@ -20,6 +20,7 @@ argfile=root/'build/graphical-client.args'
 argfile.write_text('\n'.join('"'+arg+'"' for arg in args))
 (root/'build/graphical-client-directory.txt').write_text(str(game))
 java=r'C:\Program Files\Eclipse Adoptium\jdk-17.0.18.8-hotspot\bin\java.exe'
+server_java=os.environ.get('VOXY_LOD_TEST_JAVA',java)
 events=queue.Queue();procs=[];logs=[];server=None;client=None
 def launch(name,args,cwd):
     process=subprocess.Popen(args,cwd=cwd,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,encoding='utf-8',errors='replace',bufsize=1)
@@ -31,7 +32,7 @@ def launch(name,args,cwd):
     return process
 def command(text):server.stdin.write(text+'\n');server.stdin.flush()
 try:
-    server=launch('server',[java,'-Xmx3G','-jar','fabric-server-launch.jar','nogui'],fixture)
+    server=launch('server',[server_java,'-Xmx3G','-jar','fabric-server-launch.jar','nogui'],fixture)
     deadline=time.monotonic()+240;requested=False;generated=False;disconnected=False
     while time.monotonic()<deadline:
         try:name,line=events.get(timeout=.5)
