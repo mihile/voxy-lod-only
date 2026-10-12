@@ -1,0 +1,88 @@
+{
+  "metadata": {
+    "seed": 424242,
+    "dimension": "minecraft:overworld",
+    "center_chunk": [
+      128,
+      128
+    ],
+    "radius_chunks": 8,
+    "target_chunks": 289,
+    "cpu_affinity": [
+      0,
+      2,
+      4,
+      6
+    ],
+    "java_flags": [
+      "-Xms1G",
+      "-Xmx4G",
+      "-XX:+UseG1GC",
+      "-XX:ActiveProcessorCount=4"
+    ],
+    "chunky_version": "1.3.146",
+    "modes": [
+      "chunky",
+      "chunky_voxy",
+      "lod_default",
+      "lod_throughput"
+    ],
+    "repeats": 3,
+    "host_ram_bytes": 33913995264,
+    "voxy_lod_only_sha256": "78670de0d83dadc7b758a1cc252211bd62b9a80496e533b14b7f3f8e5949de49"
+  },
+  "summary": [
+    {
+      "mode": "chunky",
+      "durable_seconds_median": 6.937667700010934,
+      "generation_seconds_median": 6.1226983000087785,
+      "cpu_seconds_median": 19.4375,
+      "cpu_budget_percent_median": 70.04335188888251,
+      "peak_rss_gib_median": 2.1019554138183594,
+      "peak_heap_gib_median": 1.364060401916504,
+      "disk_growth_mib_median": 8.404830932617188,
+      "chunks_per_second_median": 41.65665069250067,
+      "compacted_whole_lod_db_mib_median": 0.0,
+      "target_all_lod_levels_payload_mib_median": 0.0
+    },
+    {
+      "mode": "chunky_voxy",
+      "durable_seconds_median": 6.815878800000064,
+      "generation_seconds_median": 6.079893699992681,
+      "cpu_seconds_median": 19.96875,
+      "cpu_budget_percent_median": 73.45029991594404,
+      "peak_rss_gib_median": 2.4839210510253906,
+      "peak_heap_gib_median": 1.7867555618286133,
+      "disk_growth_mib_median": 19.272226333618164,
+      "chunks_per_second_median": 42.40098870302642,
+      "compacted_whole_lod_db_mib_median": 6.980958938598633,
+      "target_all_lod_levels_payload_mib_median": 1.9465904235839844
+    },
+    {
+      "mode": "lod_default",
+      "durable_seconds_median": 77.84084989999246,
+      "generation_seconds_median": 77.55019799999718,
+      "cpu_seconds_median": 45.0625,
+      "cpu_budget_percent_median": 14.623436057547288,
+      "peak_rss_gib_median": 2.3599166870117188,
+      "peak_heap_gib_median": 1.6891260668635368,
+      "disk_growth_mib_median": 19.440943717956543,
+      "chunks_per_second_median": 3.7127035530996686,
+      "compacted_whole_lod_db_mib_median": 6.994953155517578,
+      "target_all_lod_levels_payload_mib_median": 1.9559917449951172
+    },
+    {
+      "mode": "lod_throughput",
+      "durable_seconds_median": 45.85513969999738,
+      "generation_seconds_median": 45.54995190000045,
+      "cpu_seconds_median": 47.15625,
+      "cpu_budget_percent_median": 25.709359031787386,
+      "peak_rss_gib_median": 2.3439064025878906,
+      "peak_heap_gib_median": 1.6602101251482964,
+      "disk_growth_mib_median": 14.879609107971191,
+      "chunks_per_second_median": 6.30245599273611,
+      "compacted_whole_lod_db_mib_median": 7.186988830566406,
+      "target_all_lod_levels_payload_mib_median": 1.9560165405273438
+    }
+  ]
+}

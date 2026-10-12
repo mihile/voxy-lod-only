@@ -31,6 +31,12 @@ sourceSets {
         compileClasspath += sourceSets.main.compileClasspath + sourceSets.main.output
         runtimeClasspath += compileClasspath
     }
+    benchmark {
+        java.srcDir 'benchmark/harness/java'
+        resources.srcDir 'benchmark/harness/resources'
+        compileClasspath += sourceSets.main.compileClasspath
+        runtimeClasspath += compileClasspath
+    }
 }
 tasks.register('verificationJar', Jar) {
     dependsOn tasks.named('verificationClasses')
@@ -56,5 +62,18 @@ tasks.register('remapVerificationClientJar', net.fabricmc.loom.task.RemapJarTask
     inputFile = tasks.named('verificationClientJar').flatMap { it.archiveFile }
     archiveFileName = 'lod-only-client-verification.jar'
     destinationDirectory = layout.buildDirectory.dir('verification')
+    addNestedDependencies = false
+}
+tasks.register('benchmarkJar', Jar) {
+    dependsOn tasks.named('benchmarkClasses')
+    archiveFileName = 'lod-benchmark-dev.jar'
+    destinationDirectory = layout.buildDirectory.dir('benchmark')
+    from sourceSets.benchmark.output
+}
+tasks.register('remapBenchmarkJar', net.fabricmc.loom.task.RemapJarTask) {
+    dependsOn tasks.named('benchmarkJar')
+    inputFile = tasks.named('benchmarkJar').flatMap { it.archiveFile }
+    archiveFileName = 'lod-benchmark.jar'
+    destinationDirectory = layout.buildDirectory.dir('benchmark')
     addNestedDependencies = false
 }

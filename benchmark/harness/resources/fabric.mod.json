@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"lod_benchmark","version":"1","name":"Isolated LOD benchmark instrumentation","environment":"server","entrypoints":{"main":["dev.mihile.voxylodonly.benchmark.BenchmarkMod"]},"depends":{"fabric-api":"*"}}
