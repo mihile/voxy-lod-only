@@ -126,6 +126,7 @@ Gradle 실행은 JDK 21, 결과물은 Java 17입니다.
 설계는 [DESIGN.md](DESIGN.md), [검증 결과](VALIDATION.md), 재현 가능한 검증 절차는 [verification/README.md](verification/README.md)를 참고하세요.
 Chunky와 같은 CPU/힙 제한으로 비교한 용량·생성/읽기 속도 실측은 [벤치마크 보고서](benchmark/REPORT.md)에 있습니다.
 0.2.0의 병렬화·GraalVM 비교는 [스케줄링 개선 보고서](benchmark/SCHEDULER_REPORT.md)를 참고하세요.
+일반 Temurin 17/25와 GraalVM의 동일 조건 실측은 [JVM 비교](benchmark/JVM_REPORT.md)에 있습니다.
 
 이 프로젝트는 새로 작성한 구현이며 DH나 Voxy WorldGen의 코드를 복사하지 않았습니다.
 MIT 라이선스. Minecraft, Fabric, Voxy, VoxyServer는 각자의 별도 라이선스를 따릅니다.

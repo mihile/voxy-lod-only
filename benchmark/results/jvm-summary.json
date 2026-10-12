@@ -1,0 +1,115 @@
+{
+  "artifact_sha256": "58c10af86de838a6fd74a1eaab0c2c8532575f477ee2b1bd46a3cf584b7a4f28",
+  "summary": [
+    {
+      "case": "new-java17",
+      "label": "Temurin 17",
+      "runs": 3,
+      "java_version": "openjdk version \"17.0.18\" 2026-01-20\nOpenJDK Runtime Environment Temurin-17.0.18+8 (build 17.0.18+8)\nOpenJDK 64-Bit Server VM Temurin-17.0.18+8 (build 17.0.18+8, mixed mode, sharing)",
+      "flags": [
+        "-Xms1G",
+        "-Xmx4G",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=4"
+      ],
+      "compiler_gc_flags": [
+        "bool TieredCompilation                        = true                                   {pd product} {default}",
+        "bool UseG1GC                                  = true                                      {product} {ergonomic}"
+      ],
+      "durable_seconds": 13.713226299994858,
+      "generation_seconds": 13.404515300004277,
+      "cpu_seconds": 37.640625,
+      "cpu_budget_percent": 68.45011191861919,
+      "peak_rss_gib": 2.4665069580078125,
+      "mean_mspt": 0.5146611392307692,
+      "seconds_range": [
+        13.530955599999288,
+        13.823558000003686
+      ]
+    },
+    {
+      "case": "new-java25",
+      "label": "Temurin 25",
+      "runs": 3,
+      "java_version": "openjdk version \"25.0.3\" 2026-04-21 LTS\nOpenJDK Runtime Environment Temurin-25.0.3+9 (build 25.0.3+9-LTS)\nOpenJDK 64-Bit Server VM Temurin-25.0.3+9 (build 25.0.3+9-LTS, mixed mode, sharing)",
+      "flags": [
+        "-Xms1G",
+        "-Xmx4G",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=4"
+      ],
+      "compiler_gc_flags": [
+        "bool TieredCompilation                        = true                                   {pd product} {default}",
+        "bool UseCompactObjectHeaders                  = false                          {product lp64_product} {default}",
+        "bool UseG1GC                                  = true                                      {product} {ergonomic}"
+      ],
+      "durable_seconds": 14.044584599992959,
+      "generation_seconds": 13.727536599995801,
+      "cpu_seconds": 41.03125,
+      "cpu_budget_percent": 73.01408014925599,
+      "peak_rss_gib": 2.1407814025878906,
+      "mean_mspt": 0.558517335,
+      "seconds_range": [
+        14.02875659998972,
+        14.969287399988389
+      ]
+    },
+    {
+      "case": "new-graal-c2",
+      "label": "GraalVM 25 / C2",
+      "runs": 3,
+      "java_version": "java version \"25.0.4.1.1\" 2026-08-18 LTS\nJava(TM) SE Runtime Environment Oracle GraalVM 25.4.4.1.1+1.1 (build 25.0.4.1.1+1-LTS-jvmci-25.4-b23)\nJava HotSpot(TM) 64-Bit Server VM Oracle GraalVM 25.4.4.1.1+1.1 (build 25.0.4.1.1+1-LTS-jvmci-25.4-b23, mixed mode, sharing)",
+      "flags": [
+        "-Xms1G",
+        "-Xmx4G",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=4",
+        "-XX:-UseJVMCICompiler"
+      ],
+      "compiler_gc_flags": [
+        "bool TieredCompilation                        = true                                   {pd product} {default}",
+        "bool UseCompactObjectHeaders                  = false                          {product lp64_product} {default}",
+        "bool UseG1GC                                  = true                                      {product} {ergonomic}",
+        "bool UseJVMCICompiler                         = false                               {JVMCI product} {command line}"
+      ],
+      "durable_seconds": 14.428089799999725,
+      "generation_seconds": 14.108708899992052,
+      "cpu_seconds": 41.28125,
+      "cpu_budget_percent": 71.92576350811649,
+      "peak_rss_gib": 2.5822486877441406,
+      "mean_mspt": 0.5784552021428572,
+      "seconds_range": [
+        13.175477099983254,
+        14.463197499979287
+      ]
+    },
+    {
+      "case": "new-graal",
+      "label": "GraalVM 25 / Graal",
+      "runs": 3,
+      "java_version": "java version \"25.0.4.1.1\" 2026-08-18 LTS\nJava(TM) SE Runtime Environment Oracle GraalVM 25.4.4.1.1+1.1 (build 25.0.4.1.1+1-LTS-jvmci-25.4-b23)\nJava HotSpot(TM) 64-Bit Server VM Oracle GraalVM 25.4.4.1.1+1.1 (build 25.0.4.1.1+1-LTS-jvmci-25.4-b23, mixed mode, sharing)",
+      "flags": [
+        "-Xms1G",
+        "-Xmx4G",
+        "-XX:+UseG1GC",
+        "-XX:ActiveProcessorCount=4"
+      ],
+      "compiler_gc_flags": [
+        "bool TieredCompilation                        = true                                   {pd product} {default}",
+        "bool UseCompactObjectHeaders                  = false                          {product lp64_product} {default}",
+        "bool UseG1GC                                  = true                                      {product} {ergonomic}",
+        "bool UseJVMCICompiler                         = true                                {JVMCI product} {default}"
+      ],
+      "durable_seconds": 12.890633200004231,
+      "generation_seconds": 12.562584999977844,
+      "cpu_seconds": 40.359375,
+      "cpu_budget_percent": 77.02171141276635,
+      "peak_rss_gib": 2.3594093322753906,
+      "mean_mspt": 0.5217722661538462,
+      "seconds_range": [
+        12.724699399987003,
+        13.236512500006938
+      ]
+    }
+  ]
+}

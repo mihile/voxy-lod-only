@@ -1,18 +1,21 @@
 """Equal-budget old/new/JVM scheduler trials. Only disposable server fixtures are used."""
 from pathlib import Path
-import argparse, hashlib, json, re, shutil, statistics, time
+import argparse, hashlib, json, re, shutil, statistics, time, subprocess
 from datetime import datetime
 import run as bench
 
 ROOT = bench.ROOT
 GRAAL = Path(r'C:\Java\graalvm-25.4.4.1.1+1.1\bin\java.exe')
 JAVA17 = bench.JAVA
+JAVA25 = Path(r'C:\Program Files\Eclipse Adoptium\jdk-25.0.3.9-hotspot\bin\java.exe')
 OLD = ROOT/'build/optimization/baseline-0.1.0.jar'
 NEW = ROOT/'build/libs/VoxyLodOnly-0.2.0+1.20.1.jar'
 CASES = {
     'old-graal': (GRAAL, OLD, {}, []),
     'new-graal': (GRAAL, NEW, {}, []),
     'new-java17': (JAVA17, NEW, {}, []),
+    'new-java25': (JAVA25, NEW, {}, []),
+    'new-graal-c2': (GRAAL, NEW, {}, ['-XX:-UseJVMCICompiler']),
     'chunky-graal': (GRAAL, None, {}, []),
     'new-graal-flags': (GRAAL, NEW, {}, ['-XX:+UseCompactObjectHeaders', '-Djdk.graal.TuneInlinerExploration=1']),
     'new-graal-serial': (GRAAL, NEW, {'generationThreads':1, 'generationTileSize':4, 'maxInFlightBatches':1}, []),
@@ -35,11 +38,17 @@ def main():
     metadata={'target_chunks':(2*args.radius+1)**2,'seed':424242,'center':[128,128], 'radius':args.radius,
               'warmup_chunks':25,'minimum_jvm_age_seconds':45, 'repeats':args.repeats,'cases':{}}
     results=[];server=None
+    diagnostics={}
     try:
         for trial in range(args.repeats):
             order=args.cases[trial%len(args.cases):]+args.cases[:trial%len(args.cases)]
             for case in order:
                 java, jar, overrides, extra=CASES[case]
+                if case not in diagnostics:
+                    diag=subprocess.run([str(java), *extra, '-XX:+PrintFlagsFinal', '-version'],capture_output=True,text=True,check=True)
+                    diagnostics[case]={'java_version':diag.stderr.strip(),'compiler_gc_flags':[line.strip() for line in diag.stdout.splitlines()
+                        if any(name in line for name in ['UseJVMCICompiler','UseCompactObjectHeaders','TieredCompilation','UseG1GC'])]}
+                    if case=='new-graal-c2':assert any('UseJVMCICompiler' in l and '= false' in l for l in diagnostics[case]['compiler_gc_flags'])
                 bench.JAVA=java;bench.FLAGS=['-Xms1G','-Xmx4G','-XX:+UseG1GC', '-XX:ActiveProcessorCount='+('8' if case.endswith('8cpu') else '4')]+extra
                 bench.CPUS=[0,2,4,6,8,10,12,14] if case.endswith('8cpu') else [0,2,4,6]
                 folder=session/f'{trial+1}-{case}'
@@ -55,7 +64,7 @@ def main():
                 config.update(overrides);(folder/'config/voxy-lod-only.json').write_text(json.dumps(config))
                 if args.jfr: bench.FLAGS += ['-XX:StartFlightRecording=filename=scheduler.jfr,settings=profile,dumponexit=true,maxsize=128M']
                 metadata['cases'][case]={'java':str(java),'flags':bench.FLAGS,'cpus':bench.CPUS,'config':config,
-                    'jar_sha256':hashlib.sha256(jar.read_bytes()).hexdigest() if jar else None}
+                    'jar_sha256':hashlib.sha256(jar.read_bytes()).hexdigest() if jar else None, **diagnostics[case]}
                 (session/'metadata.json').write_text(json.dumps(metadata,indent=2))
                 print(f'OPT_START trial={trial+1} case={case}',flush=True)
                 server=bench.Server(folder)
