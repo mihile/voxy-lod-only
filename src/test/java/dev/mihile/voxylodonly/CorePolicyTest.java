@@ -22,10 +22,28 @@ public class CorePolicyTest {
     }
     @Test(expected = IllegalArgumentException.class) public void excessiveRadiusRejected() { new TilePlan(0, 0, 129); }
     @Test public void largerTilesCoverNegativeAndBoundaryCoordinates() {
-        TilePlan plan = new TilePlan(-3, 7, 9, 8);
-        Set<TilePlan.Tile> tiles = new HashSet<>(); plan.forEachRemaining(tile -> assertTrue(tiles.add(tile)));
-        for (int x = -12; x <= 6; x++) for (int z = -2; z <= 16; z++)
-            assertTrue(tiles.contains(new TilePlan.Tile(Math.floorDiv(x, 8), Math.floorDiv(z, 8))));
+        for (int size : new int[]{8,16,32}) {
+            TilePlan plan = new TilePlan(-3, 7, 9, size);
+            Set<TilePlan.Tile> tiles = new HashSet<>(); plan.forEachRemaining(tile -> assertTrue(tiles.add(tile)));
+            for (int x = -12; x <= 6; x++) for (int z = -2; z <= 16; z++)
+                assertTrue(tiles.contains(new TilePlan.Tile(Math.floorDiv(x, size), Math.floorDiv(z, size))));
+        }
+    }
+    @Test public void requestOriginAvoidsArtificialSplitsAndCoversPartialEdges() {
+        for(int size:new int[]{4,8,16,32}) {
+            TilePlan plan=new TilePlan(-3,7,9,size,true);
+            Set<String> covered=new HashSet<>();
+            while(plan.hasNext()) {
+                var tile=plan.next();
+                for(int z=plan.startZ(tile);z<plan.startZ(tile)+size;z++)
+                    for(int x=plan.startX(tile);x<plan.startX(tile)+size;x++)
+                        if(plan.includes(x,z)) assertTrue(covered.add(x+","+z));
+            }
+            assertEquals(19*19,covered.size());
+        }
+        TilePlan small=new TilePlan(128,128,8,32,true);
+        var only=small.next();assertEquals(120,small.startX(only));assertEquals(120,small.startZ(only));
+        assertFalse(small.hasNext());
     }
     @Test public void nestedGuardPreservesOuterScope() {
         try (var outer = GenerationGuard.enter()) {

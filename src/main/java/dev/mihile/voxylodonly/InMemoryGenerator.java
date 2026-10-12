@@ -18,6 +18,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicInteger;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 
 /** Owns only ProtoChunks. Never registers a ChunkHolder, ticket, entity, or region-file writer. */
 public final class InMemoryGenerator {
@@ -25,7 +27,8 @@ public final class InMemoryGenerator {
     private final ServerLevel level;
     private final BooleanSupplier cancelled;
     private final ChunkGenerator generator;
-    private final Map<Long, ProtoChunk> chunks = new HashMap<>();
+    private final Long2ObjectOpenHashMap<ProtoChunk> chunks = new Long2ObjectOpenHashMap<>();
+    private final Long2ObjectOpenHashMap<List<ChunkAccess>> neighborhoods = new Long2ObjectOpenHashMap<>();
     private final Executor stageExecutor;
     private final int parallelism, tileSize;
 
@@ -45,10 +48,35 @@ public final class InMemoryGenerator {
     }
 
     public Batch generate(int tileX, int tileZ, Set<Long> eligible, boolean structures) {
-        int minX = Math.multiplyExact(tileX, tileSize), minZ = Math.multiplyExact(tileZ, tileSize);
-        // Two terrain chunks around output: decorations write into a neighbor; carvers read eight.
-        int terrainMinX = minX - 2, terrainMinZ = minZ - 2;
-        int terrainMaxX = minX + tileSize + 1, terrainMaxZ = minZ + tileSize + 1;
+        int tileMinX = Math.multiplyExact(tileX, tileSize), tileMinZ = Math.multiplyExact(tileZ, tileSize);
+        return generateAt(tileMinX,tileMinZ,eligible,structures);
+    }
+    /** Absolute chunk origin permits bounded patches anchored to the request, not a world grid. */
+    public Batch generateAt(int tileMinX, int tileMinZ, Set<Long> eligible, boolean structures) {
+        int tileX=tileMinX, tileZ=tileMinZ;
+        if (eligible.isEmpty()) return new Batch(tileX, tileZ, List.of(), null);
+        int minX = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
+        for (long key : eligible) {
+            ChunkPos pos = new ChunkPos(key);
+            if (pos.x < tileMinX || pos.x >= tileMinX + tileSize || pos.z < tileMinZ || pos.z >= tileMinZ + tileSize)
+                throw new IllegalArgumentException("Eligible chunk outside tile: " + pos);
+            minX = Math.min(minX, pos.x); minZ = Math.min(minZ, pos.z);
+            maxX = Math.max(maxX, pos.x); maxZ = Math.max(maxZ, pos.z);
+        }
+        // Full/cropped Nether decoration comparisons produced different blocks.
+        // Cropping changes that context. Keep the
+        // full patch outside the tested Overworld domain; only eligible output is saved.
+        if (level.dimension() != net.minecraft.world.level.Level.OVERWORLD) {
+            minX=tileMinX; minZ=tileMinZ;
+            maxX=tileMinX+tileSize-1; maxZ=tileMinZ+tileSize-1;
+        }
+        // Keep every dependency around the requested rectangle, not around unused tile cells.
+        // Holes still get terrain/decorations: an eligible neighbor may depend on them.
+        // Light can arrive from an adjacent chunk. Its decorations may originate one
+        // further chunk away, and those decorators need their own terrain neighbor.
+        int terrainMinX = minX - 3, terrainMinZ = minZ - 3;
+        int terrainMaxX = maxX + 3, terrainMaxZ = maxZ + 3;
         try (var ignored = GenerationGuard.enter()) {
             for (int z = terrainMinZ - 8; z <= terrainMaxZ + 8; z++) {
                 for (int x = terrainMinX - 8; x <= terrainMaxX + 8; x++) {
@@ -67,6 +95,12 @@ public final class InMemoryGenerator {
                     chunk.setStatus(ChunkStatus.STRUCTURE_STARTS);
             });
             List<ProtoChunk> terrain = square(terrainMinX, terrainMinZ, terrainMaxX, terrainMaxZ);
+            // The same immutable neighborhood is used by all six stages. Build it once before
+            // publishing to workers; stage/status state stays in separate WorldGenRegions.
+            for (ProtoChunk chunk : terrain) {
+                var pos = chunk.getPos();
+                neighborhoods.put(pos.toLong(), List.copyOf(square(pos.x - 8, pos.z - 8, pos.x + 8, pos.z + 8)));
+            }
             stage(terrain, chunk -> {
                 check();
                 var region = region(chunk, ChunkStatus.STRUCTURE_REFERENCES, -1);
@@ -102,7 +136,7 @@ public final class InMemoryGenerator {
                 Heightmap.primeHeightmaps(chunk, ChunkStatus.POST_FEATURES);
             });
             // Stable z/x order. Neighbor decorations can contribute blocks to the output tile.
-            for (ProtoChunk chunk : square(minX - 1, minZ - 1, minX + tileSize, minZ + tileSize)) {
+            for (ProtoChunk chunk : square(minX - 2, minZ - 2, maxX + 2, maxZ + 2)) {
                 check();
                 var region = region(chunk, ChunkStatus.FEATURES, 1);
                 try (var decoration = GenerationGuard.enter(region)) {
@@ -129,7 +163,7 @@ public final class InMemoryGenerator {
                 light.propagateLightSources(chunk.getPos());
             }
             while (light.hasLightWork()) { check(); light.runLightUpdates(); }
-            List<ProtoChunk> output = square(minX, minZ, minX + tileSize - 1, minZ + tileSize - 1).stream()
+            List<ProtoChunk> output = square(minX, minZ, maxX, maxZ).stream()
                     .filter(chunk -> eligible.contains(chunk.getPos().toLong())).toList();
             return new Batch(tileX, tileZ, output, light);
         }
@@ -139,12 +173,14 @@ public final class InMemoryGenerator {
         // One bounded task per worker. Every stage drains all siblings, even on failure/cancel.
         // The immutable region map is published before submission; each task owns its output chunk.
         int count = Math.min(parallelism, work.size());
+        AtomicInteger next = new AtomicInteger();
         var futures = new ArrayList<CompletableFuture<Void>>(count);
         for (int lane = 0; lane < count; lane++) {
-            final int start = lane;
             futures.add(CompletableFuture.runAsync(() -> {
                 try (var guard = GenerationGuard.enter()) {
-                    for (int i = start; i < work.size(); i += count) {
+                    // Chunk costs vary with terrain/structures. A free worker takes the next
+                    // chunk instead of waiting for a slower fixed lane at the stage barrier.
+                    for (int i; (i = next.getAndIncrement()) < work.size();) {
                         check(); action.accept(work.get(i));
                     }
                 }
@@ -155,8 +191,7 @@ public final class InMemoryGenerator {
     }
 
     private WorldGenRegion region(ProtoChunk chunk, ChunkStatus status, int writeRadius) {
-        var pos = chunk.getPos();
-        return new PrivateRegion(level, new ArrayList<ChunkAccess>(square(pos.x - 8, pos.z - 8, pos.x + 8, pos.z + 8)), status, writeRadius);
+        return new PrivateRegion(level, neighborhoods.get(chunk.getPos().toLong()), status, writeRadius);
     }
     private static final class PrivateRegion extends WorldGenRegion {
         PrivateRegion(ServerLevel level, List<ChunkAccess> chunks, ChunkStatus status, int radius) { super(level, chunks, status, radius); }

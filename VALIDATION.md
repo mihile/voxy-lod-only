@@ -105,3 +105,83 @@ GraalVM 25.4.4.1.1+1.1 (Java 25.0.4.1.1), with the same Voxy/Fabric versions.
 Scheduler/JVM measurements and individual resource samples are documented in
 [the scheduler report](benchmark/SCHEDULER_REPORT.md). Intermediate build trials
 are kept locally but excluded from the final artifact's comparison table.
+
+
+## 0.3.0: Chunky analysis and reduced duplicate generation (2026-10-13)
+
+Final artifact SHA-256: `cb68150c0d1e54d808625c73d1637c8c01f84e658a098d55560e3a5ebb79cf72`.
+The companion Voxy port.8 and VoxyServer port.1 binaries were not modified.
+
+- Gradle build and 10 JUnit policy tests: PASS, including request-relative tile
+  coverage at negative/boundary coordinates and maximum size 32.
+- GraalVM 25.4 server generator fixture: `build/isolated-20261013-052659`, five clean boots,
+  3 GiB max heap. Serial versus three-worker generation at sizes 4/8/16/32,
+  Overworld/Nether: **222,298,112 block/biome/sky-light/block-light comparisons** PASS.
+- Full versus one-corner eligible output (both opposite corners) at all tested
+  sizes: PASS. An initial missing neighbor-decoration lighting contribution was
+  found in Nether size 8; decoration halo is now 2 and terrain halo 3.
+- A later size-32 Nether full/cropped comparison had different block results.
+  Final code limits rectangle cropping to Overworld and retains complete patches
+  elsewhere. The manager also caps non-Overworld patches at 8 and preserves the
+  original world grid there to avoid expensive full 32-sized generation for tiny
+  requests. These cases now match the full patch; this is a conservative
+  restriction, not a claim that all modded decoration contexts can be cropped.
+- A cold parallel structure-generation case at coordinates 256 reproduced
+  ConcurrentModificationException in StructureTemplate.Palette.blocks' lazy
+  HashMap. The constructor now installs ConcurrentHashMap for this shared cache.
+  64 cold palettes / 64 block keys / 3 concurrent workers retain identical cache
+  contents. The previously failing shutdown-during-generation case now passes.
+- Private-world guards, saved/loaded chunk skip, remote Overworld and Nether LOD,
+  cancellation, shutdown while generating, checkpoint restart, normal-visit
+  marker persistence, real-chunk-wins race and negative coordinates: PASS.
+  No remote vanilla terrain/entity/POI region files were created, no pending
+  private generation or Voxy references after shutdown, server ERROR count zero.
+- Performance and functional tests are separate. The performance runs fix
+  GraalVM, 4 logical CPUs and 4 GiB heap; functional tests do not use that CPU
+  affinity. See [Chunky comparison](benchmark/CHUNKY_OPTIMIZATION.md) for measured
+  output and exact configuration. Existing config values remain unchanged on
+  upgrade; new defaults are tile 32 / commit chunk cap 16 / commit budget 3ms.
+
+Operational servers, client instances, caches and JARs were not replaced.
+Normal FULL Minecraft decoration equivalence at every coordinate and complete
+Prominence modpack/FPS behavior are not claimed by these isolated tests.
+
+The final manager's non-Overworld tile cap was then rechecked in
+`build/isolated-20261013-053357` with the five-phase server workflow, skipping
+only the unchanged generator comparison: PASS, no server errors or remote
+region files. The generator/cache comparison above applies to the unchanged
+final generation code.
+
+Graphical Overworld check: client `build/graphical-client-20261013-053131`,
+server `build/isolated-20261013-052659` (the same final Overworld generator and
+palette mixin, before the non-Overworld manager cap). Remote vanilla client
+chunk absent, **127,248 non-air distant Voxy voxels**, geometry and frame render
+execution positive, no UNKNOWN/network-null error. Disconnect left state idle,
+inFlight=0, error=none; server/client exit codes both zero. Offline test-account
+401/Realms errors and optional missing-Iris warnings were expected. This checks
+the render path, not pixel-perfect shader correctness or an FPS benchmark.
+
+
+Final parallel-conversion pipeline validation:
+
+- `build/isolated-20261013-055352`: five server boots PASS with final JAR.
+  The 384 packed sections (including all mip levels) match sequential Voxy
+  conversion on the same mapper. Cancellation before queued work starts,
+  executor rejection, exactly-once lease release and bounded 16-chunk producer
+  window tests PASS. Immediate repeated jobs no longer announce completion
+  before conversion/ref cleanup. The unchanged terrain comparison was skipped.
+- `build/isolated-graphics-20261013-055952`, client
+  `build/graphical-client-20261013-060015`: final-JAR graphical check PASS,
+  remote vanilla chunk absent, 127,248 non-air Voxy voxels and active geometry/
+  render frame execution. Disconnect: idle, inFlight=0, conversionTasks=0,
+  error=none. Both process exit codes 0. Server errors 0; client offline-account
+  authentication errors and optional-Iris warnings as described above.
+- One earlier reuse of the closed fixture produced a RocksDB LOCK open failure
+  and VoxyInstance's existing exception-path lock leak, ending in a watchdog.
+  The initiating file lock remains unexplained; the fresh-path copy passed.
+  This failed run is not counted as a success or used in performance results.
+  [Separate Voxy core note and prompt](benchmark/VOXY_STORAGE_LOCK_NOTE.md).
+
+The final 0.3 result uses background conversion. Intermediate measurements
+in `build/optimization/20261013-050514` and `20261013-053627` use different JARs
+and are excluded from the final performance table.

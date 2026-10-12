@@ -10,7 +10,11 @@ JAVA17 = bench.JAVA
 JAVA25 = Path(r'C:\Program Files\Eclipse Adoptium\jdk-25.0.3.9-hotspot\bin\java.exe')
 OLD = ROOT/'build/optimization/baseline-0.1.0.jar'
 NEW = ROOT/'build/libs/VoxyLodOnly-0.2.0+1.20.1.jar'
+V03 = ROOT/'build/libs/VoxyLodOnly-0.3.0+1.20.1.jar'
 CASES = {
+    'baseline02-graal': (GRAAL, ROOT/'build/optimization/baseline-0.2.0.jar', {}, []),
+    'v03-graal': (GRAAL, V03, {'generationTileSize':32,'commitChunksPerTick':16}, []),
+    'v03-graal-tile8': (GRAAL, V03, {'generationTileSize':8}, []),
     'old-graal': (GRAAL, OLD, {}, []),
     'new-graal': (GRAAL, NEW, {}, []),
     'new-java17': (JAVA17, NEW, {}, []),
@@ -27,6 +31,7 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--cases', nargs='+', choices=CASES, default=['old-graal','new-graal','new-java17','chunky-graal','new-graal-flags'])
     parser.add_argument('--repeats', type=int, default=3)
+    parser.add_argument('--order-offset', type=int, default=0)
     parser.add_argument('--radius', type=int, default=8)
     parser.add_argument('--jfr', action='store_true')
     parser.add_argument('--base', type=Path, default=ROOT/'build/benchmark/20261013-020547/base')
@@ -36,12 +41,13 @@ def main():
     base=args.base.resolve()
     assert bench.region_stats(base/'bench-world',128,128,args.radius).get('target_saved_chunks',0)==0
     metadata={'target_chunks':(2*args.radius+1)**2,'seed':424242,'center':[128,128], 'radius':args.radius,
-              'warmup_chunks':25,'minimum_jvm_age_seconds':45, 'repeats':args.repeats,'cases':{}}
+              'warmup_chunks':25,'minimum_jvm_age_seconds':45, 'repeats':args.repeats,'order_offset':args.order_offset,'cases':{}}
     results=[];server=None
     diagnostics={}
     try:
         for trial in range(args.repeats):
-            order=args.cases[trial%len(args.cases):]+args.cases[:trial%len(args.cases)]
+            offset=(trial+args.order_offset)%len(args.cases)
+            order=args.cases[offset:]+args.cases[:offset]
             for case in order:
                 java, jar, overrides, extra=CASES[case]
                 if case not in diagnostics:

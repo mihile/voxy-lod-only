@@ -12,9 +12,9 @@ public final class LodOnlyConfig {
     public boolean automatic = true;
     public int radiusChunks = 32;
     public int cooldownTicks = 1;
-    public int commitChunksPerTick = 4;
+    public int commitChunksPerTick = 16;
     public int generationThreads = 0;
-    public int generationTileSize = 8;
+    public int generationTileSize = 32;
     public int maxInFlightBatches = 2;
     public double commitBudgetMillis = 3;
     public double pauseAboveTickMillis = 45;
@@ -26,9 +26,9 @@ public final class LodOnlyConfig {
         try {
             LodOnlyConfig config = Files.exists(file) ? gson.fromJson(Files.readString(file), LodOnlyConfig.class) : new LodOnlyConfig();
             if (config == null || config.radiusChunks < 1 || config.radiusChunks > 128
-                    || config.cooldownTicks < 1 || config.commitChunksPerTick < 1 || config.commitChunksPerTick > 4
+                    || config.cooldownTicks < 1 || config.commitChunksPerTick < 1 || config.commitChunksPerTick > 16
                     || config.generationThreads < 0 || config.generationThreads > 8
-                    || (config.generationTileSize != 4 && config.generationTileSize != 8)
+                    || (config.generationTileSize != 4 && config.generationTileSize != 8 && config.generationTileSize != 16 && config.generationTileSize != 32)
                     || config.maxInFlightBatches < 1 || config.maxInFlightBatches > 2
                     || !Double.isFinite(config.commitBudgetMillis) || config.commitBudgetMillis < 1 || config.commitBudgetMillis > 10
                     || !Double.isFinite(config.pauseAboveTickMillis) || config.pauseAboveTickMillis < 1

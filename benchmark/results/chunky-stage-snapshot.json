@@ -1,0 +1,16 @@
+{
+  "fixture": "build\\optimization\\20261013-060141\\1-chunky-graal\\bench-world\\region",
+  "selection_center": [
+    128,
+    128
+  ],
+  "selection_radius": 32,
+  "final_saved_status_counts": {
+    "minecraft:structure_starts": 992,
+    "minecraft:biomes": 88,
+    "minecraft:carvers": 80,
+    "minecraft:initialize_light": 72,
+    "minecraft:full": 289
+  },
+  "total": 1521
+}

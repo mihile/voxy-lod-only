@@ -13,7 +13,7 @@ for name in ['libraries', 'fabric-server-launch.jar', 'fabric-server-launcher.pr
     else: shutil.copy2(src, dst)
 (fixture/'mods').mkdir(); (fixture/'config').mkdir()
 for src in [root/'libs/voxy.jar', root/'libs/voxyserver.jar',
-            root/'build/libs/VoxyLodOnly-0.2.0+1.20.1.jar', root/'build/verification/lod-only-verification.jar',
+            root/'build/libs/VoxyLodOnly-0.3.0+1.20.1.jar', root/'build/verification/lod-only-verification.jar',
             next((template/'mods').glob('fabric-api-*.jar'))]: shutil.copy2(src, fixture/'mods'/src.name)
 (fixture/'eula.txt').write_text('eula=true\n')
 (fixture/'server.properties').write_text('server-ip=127.0.0.1\nserver-port=25587\nonline-mode=false\nlevel-name=verify-world\nlevel-seed=424242\nview-distance=2\nsimulation-distance=2\nmax-tick-time=180000\nspawn-protection=0\n')
@@ -73,7 +73,14 @@ server=None
 try:
     server=Server(1)
     server.command('lodonlytest guard');server.wait('VERIFY_GUARD PASS')
-    server.command('lodonlytest parallel');server.wait('VERIFY_PARALLEL_ALL PASS',240)
+    if '--skip-parallel' not in sys.argv:
+        server.command('lodonlytest parallel');server.wait('VERIFY_PARALLEL_ALL PASS',600)
+    if '--parallel-only' in sys.argv:
+        server.stop();server=None
+        assert not remote_region_files(),remote_region_files()
+        print('ALL_PARALLEL_AND_CROP_TESTS PASS fixture='+str(fixture),flush=True)
+        sys.exit(0)
+    server.command('lodonlytest conversion');server.wait('VERIFY_CONVERSION',120)
     assert 'generated=0' in server.job('minecraft:overworld',0,0,0)
     assert 'generated=9' in server.job('minecraft:overworld',128,128,1)
     assert 'generated=10' in server.job('minecraft:the_nether',128,128,0)
