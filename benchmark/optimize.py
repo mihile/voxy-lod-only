@@ -1,6 +1,6 @@
 """Equal-budget old/new/JVM scheduler trials. Only disposable server fixtures are used."""
 from pathlib import Path
-import argparse, hashlib, json, re, shutil, statistics, time, subprocess
+import argparse, hashlib, json, re, shutil, statistics, time, subprocess, os
 from datetime import datetime
 import run as bench
 
@@ -14,6 +14,8 @@ V03 = ROOT/'build/libs/VoxyLodOnly-0.3.0+1.20.1.jar'
 CASES = {
     'baseline02-graal': (GRAAL, ROOT/'build/optimization/baseline-0.2.0.jar', {}, []),
     'v03-graal': (GRAAL, V03, {'generationTileSize':32,'commitChunksPerTick':16}, []),
+    'v04-graal': (GRAAL, ROOT/'build/libs/VoxyLodOnly-0.4.0+1.20.1.jar', {'generationTileSize':32,'commitChunksPerTick':64}, []),
+    'v04-graal-cap16': (GRAAL, ROOT/'build/libs/VoxyLodOnly-0.4.0+1.20.1.jar', {'generationTileSize':32,'commitChunksPerTick':16,'idleCommitBudgetMillis':3}, []),
     'v03-graal-tile8': (GRAAL, V03, {'generationTileSize':8}, []),
     'old-graal': (GRAAL, OLD, {}, []),
     'new-graal': (GRAAL, NEW, {}, []),
@@ -34,6 +36,7 @@ def main():
     parser.add_argument('--order-offset', type=int, default=0)
     parser.add_argument('--radius', type=int, default=8)
     parser.add_argument('--jfr', action='store_true')
+    parser.add_argument('--profile-stages', action='store_true')
     parser.add_argument('--base', type=Path, default=ROOT/'build/benchmark/20261013-020547/base')
     args=parser.parse_args()
     session=ROOT/'build/optimization'/datetime.now().strftime('%Y%m%d-%H%M%S');session.mkdir(parents=True)
@@ -42,6 +45,8 @@ def main():
     assert bench.region_stats(base/'bench-world',128,128,args.radius).get('target_saved_chunks',0)==0
     metadata={'target_chunks':(2*args.radius+1)**2,'seed':424242,'center':[128,128], 'radius':args.radius,
               'warmup_chunks':25,'minimum_jvm_age_seconds':45, 'repeats':args.repeats,'order_offset':args.order_offset,'cases':{}}
+    companion=Path(os.environ.get('VOXY_TEST_JAR', str(ROOT/'libs/voxy.jar')))
+    metadata['companion_voxy']={'path':str(companion),'sha256':hashlib.sha256(companion.read_bytes()).hexdigest()}
     results=[];server=None
     diagnostics={}
     try:
@@ -69,6 +74,7 @@ def main():
                         'generationThreads':0,'generationTileSize':8,'maxInFlightBatches':2,'commitBudgetMillis':3}
                 config.update(overrides);(folder/'config/voxy-lod-only.json').write_text(json.dumps(config))
                 if args.jfr: bench.FLAGS += ['-XX:StartFlightRecording=filename=scheduler.jfr,settings=profile,dumponexit=true,maxsize=128M']
+                if args.profile_stages: bench.FLAGS += ['-Dvoxy.lod.profile=true']
                 metadata['cases'][case]={'java':str(java),'flags':bench.FLAGS,'cpus':bench.CPUS,'config':config,
                     'jar_sha256':hashlib.sha256(jar.read_bytes()).hexdigest() if jar else None, **diagnostics[case]}
                 (session/'metadata.json').write_text(json.dumps(metadata,indent=2))

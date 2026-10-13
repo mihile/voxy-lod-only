@@ -25,7 +25,9 @@ public final class CompletionLedger {
     }
     public boolean contains(long pos) { return completed.contains(pos); }
     public void add(long pos) { if (completed.size() >= LIMIT && !completed.contains(pos)) throw new IllegalStateException("Checkpoint capacity reached"); completed.add(pos); }
+    public void remove(long pos) { completed.remove(pos); }
     public int size() { return completed.size(); }
+    public boolean needsSave() { return !completed.isEmpty() || Files.exists(file); }
     public void save() throws IOException {
         Files.createDirectories(file.getParent());
         Path temp = file.resolveSibling(file.getFileName() + ".tmp");

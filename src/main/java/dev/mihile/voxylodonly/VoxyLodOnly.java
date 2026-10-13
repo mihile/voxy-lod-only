@@ -45,6 +45,7 @@ public final class VoxyLodOnly implements ModInitializer {
             startingServer = null; startingBridge = null;
         });
         CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) -> {
+            LodCommands.register(dispatcher, () -> manager);
             var root = Commands.literal("voxylodonly").requires(source -> source.hasPermission(2));
             root.then(Commands.literal("status").executes(ctx -> {
                 ctx.getSource().sendSuccess(() -> Component.literal(manager == null ? "Voxy LOD Only inactive" : manager.status()), false); return 1;

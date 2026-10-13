@@ -1,9 +1,75 @@
 # Generation and storage ownership
 
+0.8 cancels StructureTemplate.placeEntities only inside the private generation
+guard, before creating/deserializing any template entity. Ordinary placement
+keeps its entity path. Known-template loading repairs a confirmed empty
+terminal signature in BetterArcheology catacomb/light-temple jigsaws, and drops
+two known Integrated Villages optional entity types only if absent from the
+actual registry. Fixes run before the loaded template is published in its cache,
+so generation workers see a complete template. The enclosing tryLoad hook also
+works when ModernFix overwrites the resource reader. Only the two known namespaces
+and exact defective signatures are changed in memory; unrelated data is untouched.
+No log filters or disk-resource
+rewrites are used; other failures remain visible. Counters are atomic and only
+displayed on a requested scheduler status.
+
+0.7 config reload validates a replacement snapshot before accepting it. Old work
+is cancelled and drained without blocking the server tick, then the new snapshot
+is published to future generation. A manual area's geometry and manual-pause flag
+survive; completed chunks are skipped when rebuilding its plan. Disabled configs
+still drain cancellation and accept a later enabled reload. Radius-only updates
+persist only that JSON property, cancel only automatic work, and leave explicit
+manual requests unchanged. Stop/automatic commands override a pending reload's
+automatic flag. Worker limits refresh even with unchanged player presence.
+
+Both structure-mode ledgers are loaded once per world. Completing a preview in
+one mode invalidates the opposite mode's position, since both target the same
+Voxy data. This prevents switching back from incorrectly skipping data most
+recently replaced by the other mode. Checkpoints are still written only after
+Voxy's normal final flush, including empty existing ledgers after invalidation.
+
+0.6 block-area commands use integer block-column intersection with a circle or
+square and a radius of at most 8192 blocks. Only selected chunks enter the LOD
+output set; temporary dependency halos remain needed for generation. Tile
+traversal enumerates one near-center ring at a time rather than sorting the
+entire area on the server thread. Candidate counts use a per-column circle
+formula with exact integer distance checks.
+
+Explicit start disables automatic scheduling and queues one manual area behind
+the previous job's cancellation barrier. A cancelled automatic owner's later
+logout cannot cancel the queued replacement. Pause retains the iterator, batches
+and partial section index; stop removes the queue and disables automatic work.
+Pending entries carry their requested count so existing vanilla NBT skips are
+included in current-job progress, alongside checkpoints and live-world skips.
+
 `Voxy LOD Only` is an independent, dedicated-server Fabric 1.20.1 addon for
 Voxy port.8 and VoxyServer port.1. Its generator never requests a vanilla
 `ChunkHolder`/`FULL` future, adds a ticket, or serializes a vanilla chunk.
-The upstream companion mods remain unchanged.
+The addon does not patch the companion APIs. Follow-up Voxy port.9 separately
+fixes storage-construction exception cleanup; VoxyServer port.1 remains unchanged.
+
+0.5 policy: separate `withPlayers` and `withoutPlayers` profiles select pause,
+worker count, batch cooldown, tick budget and LOD chunk admission rate. Omitted
+profile fields inherit the legacy settings. The owned generation/conversion pool
+has at most eight workers and resizes on occupancy transitions; running tasks
+drain safely after a reduction. Automatic workers reserve one detected processor
+during play. Voxy's own services and vanilla tasks remain outside this pool.
+All player state is read on the server thread before dispatch.
+
+Profile pause preserves the job cursor, pending batches and partial commit index.
+It stops new dispatch and commit, while cancellation and shutdown still drain.
+At most two terrain batches and sixteen conversions remain retained. A monotonic
+chunk-admission pacer permits no catch-up burst after a pause. The interval caps
+new preview chunk write starts; partial sections continue under the tick budget.
+It does not throttle ordinary VoxyServer ingest or network streaming.
+Optional last-player continuation retains only the already requested area. A new
+player object with the same UUID cannot inherit the previous automatic job.
+Already completed automatic areas wait at least 100 ticks before another scan.
+
+Main-thread updates keep a 3ms player budget and a configurable 10ms idle budget,
+checked after each section. Completed chunk cap is 64; converted output window
+remains 16. After lighting, the private chunk and neighborhood maps are cleared;
+the returned batch keeps the requested output and computed light DataLayers.
 
 ## Private generation domain
 

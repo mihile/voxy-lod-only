@@ -1,0 +1,28 @@
+{
+  "enabled": true,
+  "automatic": true,
+  "radiusChunks": 32,
+  "generationTileSize": 32,
+  "maxInFlightBatches": 2,
+  "structures": true,
+  "dimensions": ["minecraft:overworld"],
+  "continueAutomaticWhenEmpty": true,
+  "withPlayers": {
+    "enabled": true,
+    "generationThreads": 1,
+    "cooldownTicks": 10,
+    "commitChunksPerTick": 2,
+    "commitBudgetMillis": 1,
+    "pauseAboveTickMillis": 40,
+    "maxChunksPerSecond": 10
+  },
+  "withoutPlayers": {
+    "enabled": true,
+    "generationThreads": 4,
+    "cooldownTicks": 1,
+    "commitChunksPerTick": 64,
+    "commitBudgetMillis": 10,
+    "pauseAboveTickMillis": 45,
+    "maxChunksPerSecond": 0
+  }
+}

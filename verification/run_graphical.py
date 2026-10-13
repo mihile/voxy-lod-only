@@ -6,7 +6,7 @@ fixture=Path((root/'build/verification-fixture.txt').read_text())
 reference=Path.home()/'.codex/worktrees/voxyserver-port1-release/voxyserver'
 game=root/'build'/('graphical-client-'+datetime.now().strftime('%Y%m%d-%H%M%S'))
 mods=game/'mods';mods.mkdir(parents=True)
-for src in [root/'libs/voxy.jar',root/'libs/voxyserver.jar',root/'build/verification/lod-only-client-verification.jar',
+for src in [Path(os.environ.get('VOXY_TEST_JAR', str(root/'libs/voxy.jar'))),root/'libs/voxyserver.jar',root/'build/verification/lod-only-client-verification.jar',
             next((fixture/'mods').glob('fabric-api-*.jar')),
             next((Path.home()/'.gradle/caches/modules-2/files-2.1/maven.modrinth/sodium').rglob('sodium-mc1.20.1-0.5.13-fabric.jar'))]:
     shutil.copy2(src,mods/src.name)

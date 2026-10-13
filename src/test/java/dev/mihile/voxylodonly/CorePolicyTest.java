@@ -6,6 +6,72 @@ import java.util.*;
 import static org.junit.Assert.*;
 
 public class CorePolicyTest {
+    @Test public void legacyJsonAndPartialProfilesKeepExplicitOldValues() {
+        var gson = new com.google.gson.Gson();
+        var config = gson.fromJson("{\"generationThreads\":2,\"cooldownTicks\":20,\"commitChunksPerTick\":1,\"commitBudgetMillis\":2,\"idleCommitBudgetMillis\":7,\"withPlayers\":{\"maxChunksPerSecond\":5}}", LodOnlyConfig.class);
+        config.validate();
+        assertEquals(2,config.policy(true).generationThreads());
+        assertEquals(20,config.policy(true).cooldownTicks());
+        assertEquals(1,config.policy(false).commitChunksPerTick());
+        assertEquals(2,config.policy(true).commitBudgetMillis(),0);
+        assertEquals(7,config.policy(false).commitBudgetMillis(),0);
+        assertEquals(5,config.policy(true).maxChunksPerSecond());
+        assertEquals(0,config.policy(false).maxChunksPerSecond());
+    }
+    @Test public void activityProfilesSelectIndependentLimitsAndPause() {
+        var config = new LodOnlyConfig();
+        config.withPlayers.enabled=false;
+        config.withPlayers.generationThreads=1;
+        config.withPlayers.commitBudgetMillis=1.0;
+        config.withoutPlayers.generationThreads=4;
+        config.withoutPlayers.maxChunksPerSecond=20;
+        config.validate();
+        assertFalse(config.policy(true).enabled());
+        assertTrue(config.policy(false).enabled());
+        assertEquals(1,config.policy(true).generationThreads());
+        assertEquals(4,config.effectiveGenerationThreads());
+        assertEquals(20,config.policy(false).maxChunksPerSecond());
+        config.enabled=false;
+        assertFalse(config.policy(false).enabled());
+    }
+    @Test public void malformedProfilesFailBeforeStartingWorkers() {
+        var config = new LodOnlyConfig();
+        config.withPlayers.maxChunksPerSecond=-1;
+        assertThrows(IllegalArgumentException.class,config::validate);
+        config.withPlayers.maxChunksPerSecond=0;
+        config.withoutPlayers.commitBudgetMillis=Double.NaN;
+        assertThrows(IllegalArgumentException.class,config::validate);
+    }
+    @Test public void rateAdmissionHasNoPauseBacklogAndAdaptsToModeSwitch() {
+        var pacer = new ChunkPacer();
+        assertTrue(pacer.admit(0,2));
+        assertFalse(pacer.admit(499_999_999L,2));
+        assertTrue(pacer.admit(500_000_000L,2));
+        assertTrue(pacer.admit(10_000_000_000L,2));
+        assertFalse(pacer.admit(10_000_000_000L,2));
+        assertTrue(pacer.admit(10_000_000_000L,4));
+        assertFalse(pacer.admit(10_249_999_999L,4));
+        assertTrue(pacer.admit(10_250_000_000L,4));
+        assertTrue(pacer.admit(10_250_000_000L,0));
+        assertTrue(pacer.admit(10_250_000_000L,0));
+    }
+    @Test public void automaticWorkerBudgetReservesCapacityOnlyWhenNeeded() {
+        assertEquals(4,LodOnlyConfig.automaticWorkers(4,false));
+        assertEquals(3,LodOnlyConfig.automaticWorkers(4,true));
+        assertEquals(1,LodOnlyConfig.automaticWorkers(1,true));
+        assertEquals(8,LodOnlyConfig.automaticWorkers(16,false));
+        assertEquals(8,LodOnlyConfig.automaticWorkers(16,true));
+        LodOnlyConfig explicit=new LodOnlyConfig();explicit.generationThreads=2;
+        assertEquals(2,explicit.activeGenerationThreads(false));
+        assertEquals(2,explicit.activeGenerationThreads(true));
+    }
+    @Test public void idleCommitAllowanceDoesNotChangePlayerBudget() {
+        LodOnlyConfig config=new LodOnlyConfig();
+        assertEquals(10,config.activeCommitBudgetMillis(false),0);
+        assertEquals(3,config.activeCommitBudgetMillis(true),0);
+        config.idleCommitBudgetMillis=3;
+        assertEquals(3,config.activeCommitBudgetMillis(false),0);
+    }
     @Test public void negativeCoordinatesUseFloorDivision() {
         TilePlan plan = new TilePlan(-1, -1, 0);
         assertEquals(new TilePlan.Tile(-1, -1), plan.next());

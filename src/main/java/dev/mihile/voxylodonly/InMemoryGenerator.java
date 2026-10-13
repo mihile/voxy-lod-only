@@ -31,6 +31,8 @@ public final class InMemoryGenerator {
     private final Long2ObjectOpenHashMap<List<ChunkAccess>> neighborhoods = new Long2ObjectOpenHashMap<>();
     private final Executor stageExecutor;
     private final int parallelism, tileSize;
+    private GenerationTiming timing;
+    private final boolean releaseContext;
 
     public record Batch(int tileX, int tileZ, List<ProtoChunk> output, LevelLightEngine light) {}
 
@@ -38,6 +40,10 @@ public final class InMemoryGenerator {
         this(level, cancelled, Runnable::run, 1, TILE);
     }
     public InMemoryGenerator(ServerLevel level, BooleanSupplier cancelled, Executor stageExecutor, int parallelism, int tileSize) {
+        this(level,cancelled,stageExecutor,parallelism,tileSize,true);
+    }
+    public InMemoryGenerator(ServerLevel level, BooleanSupplier cancelled, Executor stageExecutor, int parallelism, int tileSize, boolean releaseContext) {
+        this.releaseContext=releaseContext;
         this.level = level;
         this.cancelled = cancelled;
         this.generator = level.getChunkSource().getGenerator();
@@ -54,6 +60,7 @@ public final class InMemoryGenerator {
     /** Absolute chunk origin permits bounded patches anchored to the request, not a world grid. */
     public Batch generateAt(int tileMinX, int tileMinZ, Set<Long> eligible, boolean structures) {
         int tileX=tileMinX, tileZ=tileMinZ;
+        timing = new GenerationTiming(tileMinX,tileMinZ);
         if (eligible.isEmpty()) return new Batch(tileX, tileZ, List.of(), null);
         int minX = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
         int maxX = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
@@ -78,15 +85,17 @@ public final class InMemoryGenerator {
         int terrainMinX = minX - 3, terrainMinZ = minZ - 3;
         int terrainMaxX = maxX + 3, terrainMaxZ = maxZ + 3;
         try (var ignored = GenerationGuard.enter()) {
-            for (int z = terrainMinZ - 8; z <= terrainMaxZ + 8; z++) {
-                for (int x = terrainMinX - 8; x <= terrainMaxX + 8; x++) {
-                    check();
-                    ProtoChunk chunk = new ProtoChunk(new ChunkPos(x, z), UpgradeData.EMPTY, level,
-                            level.registryAccess().registryOrThrow(Registries.BIOME), null);
-                    chunks.put(chunk.getPos().toLong(), chunk);
+            try (var phase = timing.phase("allocation", (terrainMaxX-terrainMinX+17)*(terrainMaxZ-terrainMinZ+17))) {
+                for (int z = terrainMinZ - 8; z <= terrainMaxZ + 8; z++) {
+                    for (int x = terrainMinX - 8; x <= terrainMaxX + 8; x++) {
+                        check();
+                        ProtoChunk chunk = new ProtoChunk(new ChunkPos(x, z), UpgradeData.EMPTY, level,
+                                level.registryAccess().registryOrThrow(Registries.BIOME), null);
+                        chunks.put(chunk.getPos().toLong(), chunk);
+                    }
                 }
             }
-            stage(new ArrayList<>(chunks.values()).stream().sorted(Comparator.comparingLong(c -> c.getPos().toLong())).toList(), chunk -> {
+            stage("structures", new ArrayList<>(chunks.values()).stream().sorted(Comparator.comparingLong(c -> c.getPos().toLong())).toList(), chunk -> {
                     if (structures && level.getServer().getWorldData().worldGenOptions().generateStructures()) {
                         generator.createStructures(level.registryAccess(), level.getChunkSource().getGeneratorState(),
                                 level.structureManager(), chunk, level.getStructureManager());
@@ -97,37 +106,39 @@ public final class InMemoryGenerator {
             List<ProtoChunk> terrain = square(terrainMinX, terrainMinZ, terrainMaxX, terrainMaxZ);
             // The same immutable neighborhood is used by all six stages. Build it once before
             // publishing to workers; stage/status state stays in separate WorldGenRegions.
-            for (ProtoChunk chunk : terrain) {
-                var pos = chunk.getPos();
-                neighborhoods.put(pos.toLong(), List.copyOf(square(pos.x - 8, pos.z - 8, pos.x + 8, pos.z + 8)));
+            try (var phase = timing.phase("neighborhoods",terrain.size())) {
+                for (ProtoChunk chunk : terrain) {
+                    var pos = chunk.getPos();
+                    neighborhoods.put(pos.toLong(), List.copyOf(square(pos.x - 8, pos.z - 8, pos.x + 8, pos.z + 8)));
+                }
             }
-            stage(terrain, chunk -> {
+            stage("references", terrain, chunk -> {
                 check();
                 var region = region(chunk, ChunkStatus.STRUCTURE_REFERENCES, -1);
                 generator.createReferences(region, level.structureManager().forWorldGenRegion(region), chunk);
                 chunk.setStatus(ChunkStatus.STRUCTURE_REFERENCES);
             });
-            stage(terrain, chunk -> {
+            stage("biomes",terrain,chunk -> {
                 check();
                 var region = region(chunk, ChunkStatus.BIOMES, -1);
                 await(generator.createBiomes(Runnable::run, level.getChunkSource().randomState(),
                         Blender.of(region), level.structureManager().forWorldGenRegion(region), chunk));
                 chunk.setStatus(ChunkStatus.BIOMES);
             });
-            stage(terrain, chunk -> {
+            stage("noise",terrain,chunk -> {
                 check();
                 var region = region(chunk, ChunkStatus.NOISE, 0);
                 await(generator.fillFromNoise(Runnable::run, Blender.of(region),
                         level.getChunkSource().randomState(), level.structureManager().forWorldGenRegion(region), chunk));
                 chunk.setStatus(ChunkStatus.NOISE);
             });
-            stage(terrain, chunk -> {
+            stage("surface",terrain,chunk -> {
                 check();
                 var region = region(chunk, ChunkStatus.SURFACE, 0);
                 generator.buildSurface(region, level.structureManager().forWorldGenRegion(region), level.getChunkSource().randomState(), chunk);
                 chunk.setStatus(ChunkStatus.SURFACE);
             });
-            stage(terrain, chunk -> {
+            stage("carvers",terrain,chunk -> {
                 check();
                 var region = region(chunk, ChunkStatus.CARVERS, 0);
                 generator.applyCarvers(region, level.getSeed(), level.getChunkSource().randomState(),
@@ -136,58 +147,69 @@ public final class InMemoryGenerator {
                 Heightmap.primeHeightmaps(chunk, ChunkStatus.POST_FEATURES);
             });
             // Stable z/x order. Neighbor decorations can contribute blocks to the output tile.
-            for (ProtoChunk chunk : square(minX - 2, minZ - 2, maxX + 2, maxZ + 2)) {
-                check();
-                var region = region(chunk, ChunkStatus.FEATURES, 1);
-                try (var decoration = GenerationGuard.enter(region)) {
-                    // Some vanilla structure entities ask getLevel().structureManager(). Route
-                    // that lookup back into this private region instead of loading real chunks.
-                    generator.applyBiomeDecoration(region, chunk, level.structureManager());
+            try (var phase = timing.phase("decoration",(maxX-minX+5)*(maxZ-minZ+5))) {
+                for (ProtoChunk chunk : square(minX - 2, minZ - 2, maxX + 2, maxZ + 2)) {
+                    check();
+                    var region = region(chunk, ChunkStatus.FEATURES, 1);
+                    try (var decoration = GenerationGuard.enter(region)) {
+                        // Some vanilla structure entities ask getLevel().structureManager(). Route
+                        // that lookup back into this private region instead of loading real chunks.
+                        generator.applyBiomeDecoration(region, chunk, level.structureManager());
+                    }
+                    chunk.setStatus(ChunkStatus.FEATURES);
                 }
-                chunk.setStatus(ChunkStatus.FEATURES);
             }
-            LevelLightEngine light = new LevelLightEngine(new LightChunkGetter() {
-                @Override public LightChunk getChunkForLighting(int x, int z) {
-                    return chunks.get(ChunkPos.asLong(x, z));
+            LevelLightEngine light;
+            try (var phase = timing.phase("lighting",terrain.size())) {
+                light = new LevelLightEngine(new LightChunkGetter() {
+                    @Override public LightChunk getChunkForLighting(int x, int z) {
+                        return chunks.get(ChunkPos.asLong(x, z));
+                    }
+                    @Override public BlockGetter getLevel() { return level; }
+                }, true, level.dimensionType().hasSkyLight());
+                for (ProtoChunk chunk : terrain) {
+                    check();
+                    chunk.initializeLightSources();
+                    for (int i = 0; i < chunk.getSections().length; i++) {
+                        light.updateSectionStatus(SectionPos.of(chunk.getPos(), chunk.getMinSection() + i),
+                                chunk.getSection(i).hasOnlyAir());
+                    }
+                    light.setLightEnabled(chunk.getPos(), true);
+                    light.propagateLightSources(chunk.getPos());
                 }
-                @Override public BlockGetter getLevel() { return level; }
-            }, true, level.dimensionType().hasSkyLight());
-            for (ProtoChunk chunk : terrain) {
-                check();
-                chunk.initializeLightSources();
-                for (int i = 0; i < chunk.getSections().length; i++) {
-                    light.updateSectionStatus(SectionPos.of(chunk.getPos(), chunk.getMinSection() + i),
-                            chunk.getSection(i).hasOnlyAir());
-                }
-                light.setLightEnabled(chunk.getPos(), true);
-                light.propagateLightSources(chunk.getPos());
+                while (light.hasLightWork()) { check(); light.runLightUpdates(); }
             }
-            while (light.hasLightWork()) { check(); light.runLightUpdates(); }
             List<ProtoChunk> output = square(minX, minZ, maxX, maxZ).stream()
                     .filter(chunk -> eligible.contains(chunk.getPos().toLong())).toList();
+            // Completed light reads use stored DataLayers. Retain only output chunks,
+            // not the whole terrain/structure halo through the light getter's outer reference.
+            if (releaseContext) { chunks.clear(); neighborhoods.clear(); }
             return new Batch(tileX, tileZ, output, light);
         }
     }
 
-    private void stage(List<ProtoChunk> work, Consumer<ProtoChunk> action) {
-        // One bounded task per worker. Every stage drains all siblings, even on failure/cancel.
-        // The immutable region map is published before submission; each task owns its output chunk.
-        int count = Math.min(parallelism, work.size());
-        AtomicInteger next = new AtomicInteger();
-        var futures = new ArrayList<CompletableFuture<Void>>(count);
-        for (int lane = 0; lane < count; lane++) {
-            futures.add(CompletableFuture.runAsync(() -> {
-                try (var guard = GenerationGuard.enter()) {
-                    // Chunk costs vary with terrain/structures. A free worker takes the next
-                    // chunk instead of waiting for a slower fixed lane at the stage barrier.
-                    for (int i; (i = next.getAndIncrement()) < work.size();) {
-                        check(); action.accept(work.get(i));
-                    }
-                }
-            }, stageExecutor));
+    private void stage(String name, List<ProtoChunk> work, Consumer<ProtoChunk> action) {
+        try (var phase = timing.phase(name,work.size())) {
+            // One bounded task per worker. Every stage drains all siblings, even on failure/cancel.
+            // The immutable region map is published before submission; each task owns its output chunk.
+            int count = Math.min(parallelism, work.size());
+            AtomicInteger next = new AtomicInteger();
+            var futures = new ArrayList<CompletableFuture<Void>>(count);
+            for (int lane = 0; lane < count; lane++) {
+                futures.add(CompletableFuture.runAsync(() -> {
+                    long cpuStart = phase.startWorker();
+                    try (var guard = GenerationGuard.enter()) {
+                        // Chunk costs vary with terrain/structures. A free worker takes the next
+                        // chunk instead of waiting for a slower fixed lane at the stage barrier.
+                        for (int i; (i = next.getAndIncrement()) < work.size();) {
+                            check(); action.accept(work.get(i));
+                        }
+                    } finally { phase.endWorker(cpuStart); }
+                }, stageExecutor));
+            }
+            CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
+            check();
         }
-        CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
-        check();
     }
 
     private WorldGenRegion region(ProtoChunk chunk, ChunkStatus status, int writeRadius) {

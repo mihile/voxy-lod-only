@@ -20,7 +20,7 @@ def prepare(folder, mode, base=None):
     (folder/'mods').mkdir(); (folder/'config').mkdir()
     jars = [next((TEMPLATE/'mods').glob('fabric-api-*.jar')), ROOT/'build/benchmark/lod-benchmark.jar']
     if mode.startswith('chunky'): jars.append(ROOT/'build/benchmark/deps/Chunky.jar')
-    if mode != 'chunky' and mode != 'base': jars += [ROOT/'libs/voxy.jar', ROOT/'libs/voxyserver.jar']
+    if mode != 'chunky' and mode != 'base': jars += [Path(os.environ.get('VOXY_TEST_JAR', str(ROOT/'libs/voxy.jar'))), ROOT/'libs/voxyserver.jar']
     if mode.startswith('lod'): jars.append(ROOT/'build/libs/VoxyLodOnly-0.1.0+1.20.1.jar')
     for jar in jars: shutil.copy2(jar, folder/'mods'/jar.name)
     if base: shutil.copytree(base/'bench-world', folder/'bench-world')
@@ -32,8 +32,9 @@ def prepare(folder, mode, base=None):
     (folder/'config/voxy-lod-only.json').write_text(json.dumps(config))
 
 class Server:
-    def __init__(self, folder):
+    def __init__(self, folder, boot_timeout=180, allowed_error=None):
         self.folder=folder;self.events=queue.Queue();self.lines=[];self.samples=[];self.stop_monitor=threading.Event()
+        self.allowed_error=allowed_error
         self.log=(folder/'server.log').open('w',encoding='utf-8')
         self.created=time.perf_counter()
         self.process=subprocess.Popen([str(JAVA)]+FLAGS+['-jar','fabric-server-launch.jar','nogui'],cwd=folder,
@@ -52,7 +53,12 @@ class Server:
                 self.stop_monitor.wait(.2)
         self.reader=threading.Thread(target=reader,daemon=True);self.reader.start()
         self.monitor=threading.Thread(target=monitor,daemon=True);self.monitor.start()
-        self.wait('Done (',180);self.wait('BENCH_SAMPLE',30)
+        try:
+            self.wait('Done (',boot_timeout);self.wait('BENCH_SAMPLE',30)
+        except BaseException:
+            try: self.stop()
+            except Exception: pass
+            raise
     def command(self,command):
         self.process.stdin.write(command+'\n');self.process.stdin.flush()
     def wait(self,pattern,timeout=600):
@@ -62,7 +68,7 @@ class Server:
             try:timestamp,line=self.events.get(timeout=.5)
             except queue.Empty:continue
             if 'BENCH_FAILURE' in line or '/ERROR]' in line or 'Encountered an unexpected exception' in line:
-                raise RuntimeError(line)
+                if self.allowed_error is None or not self.allowed_error(line):raise RuntimeError(line)
             if pattern in line:return timestamp,line
         raise TimeoutError(pattern+' '+str(self.folder))
     def fence(self,label):

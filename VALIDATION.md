@@ -1,4 +1,42 @@
-# Voxy LOD Only 0.1.0 validation
+# Voxy LOD Only validation
+
+## 0.7.0 runtime config reload (2026-10-13)
+
+Final JAR SHA256: `be90c62c39f32b50bf4cad366a65c86e80d648e64cd65e7f9eec284218764c4e`.
+26 unit tests passed. `build/isolated-20261013-174005` passed radius persistence,
+invalid-config retention, paused manual restart under new worker/tile/enabled
+settings, re-enable without reboot, structure-mode overlap invalidation, stop/reload
+ordering and two-mode checkpoint persistence. `build/activity-20261013-174156`
+passed radius/worker changes with a connected player, reconnect, area takeover,
+rendering and cleanup. See [config reload validation](verification/CONFIG_RELOAD.md).
+
+## 0.6.0 block-area commands (2026-10-13)
+
+Final JAR SHA256: `6807f26085be0e19c0df87214af189dae6f30402038b28ddf571c7f6d90867fc`.
+22 unit tests passed. `build/isolated-20261013-170755` passed circle/square commands,
+pause/resume, negative coordinates, Nether selection, stop/replacement while
+cancelling, exact checkpoint-set comparison, no private FULL region files and
+restart skipping. `build/activity-20261013-170916` passed actual player reconnect,
+automatic-to-manual takeover plus immediate disconnect, independent profiles,
+zero pending work on stop and rendering without the addon installed on the client.
+See [full command/change/validation record](verification/AREA_COMMANDS.md).
+Existing five-boot server regression also passed in `build/isolated-20261013-171150`.
+
+
+## 0.5.0 occupancy profiles (2026-10-13)
+
+Final JAR SHA256: `84a7a5e99849752cb4a5d4be2017111f9c76a9b5334283f226a37afeb0c5bc44`.
+16 unit tests passed. GraalVM 25.4 fixture `build/activity-20261013-162840`
+passed actual player arrival/departure/reconnect, paused progress retention,
+profile worker/rate switching, last-player continuation and cancellation,
+empty-server four-per-second admission, and a real client without LOD Only.
+Client stored/rendered 127,248 non-air voxels for a distant vanilla-absent target.
+All three exits were zero; no server errors, UNKNOWN cache or null network handle.
+Existing five-boot server regression passed in `build/isolated-20261013-163117`.
+See [full change and validation record](verification/ACTIVITY_PROFILES.md).
+No new FPS benchmark or deployment to an operating installation was performed.
+
+## Original 0.1.0 validation
 
 2026-10-13, KST. All launches used isolated game directories/worlds.
 Minecraft 1.20.1, Fabric Loader 0.17.2, Fabric API 0.92.6,
@@ -185,3 +223,71 @@ Final parallel-conversion pipeline validation:
 The final 0.3 result uses background conversion. Intermediate measurements
 in `build/optimization/20261013-050514` and `20261013-053627` use different JARs
 and are excluded from the final performance table.
+
+## 0.4.0: idle scheduling and temporary context release (2026-10-13)
+
+Artifact SHA-256: `7927c72ced53420d14e6efb678320d7f0e9559bccfab5f570cd54cd275f97874`.
+Companions: separately fixed Voxy port.9 (`12cb5ce5f0ef90d6e8ed095bcbdd7143f7a81286a79f6bfd78d49beffbd7228b`)
+and unchanged VoxyServer port.1. No operational installation, cache, world or JAR was modified.
+
+- Build and 12 JUnit policy tests PASS. Worker count policy preserves explicit
+  settings and reserves terrain concurrency when players are present. Separate
+  idle commit allowance does not change the player commit allowance.
+- Final functional fixture `build/isolated-20261013-150923`: five server boots,
+  all exits 0, server ERROR count 0. GraalVM 25.4, 3 GiB max heap.
+- Serial, retained-neighbor reference versus four-worker, released-neighbor
+  implementation: **222,822,400 full-output voxel comparisons** at tile sizes
+  4/8/16/32 in Overworld/Nether. Block state, biome, skylight and blocklight match.
+  Both corner crops also match the corresponding full output. Nether cropping
+  remains disabled; this tests its full context, not a new crop guarantee.
+- Bounded parallel conversion/mip output (384 sections), cancellation/rejection,
+  exactly-once world lease release, saved chunk skip, remote LOD persistence,
+  cancel/stop during work, checkpoint restart, normal block marker persistence,
+  real-chunk-wins race and negative coordinates PASS. No target remote vanilla
+  region/entity/POI files and no pending private work after shutdown.
+- Final graphical server `build/isolated-graphics-v04-20261013-151629`, client
+  `build/graphical-client-20261013-151629`: GRAPHICAL_TEST PASS. GraalVM 25.4 server,
+  Java 17 client; both exits 0. Protocol 2; remote vanilla chunk absent; 127,248
+  non-air Voxy voxels; positive geometry and frame render execution. Disconnect
+  left idle/inFlight=0/conversionTasks=0/error=none. No network-null or UNKNOWN
+  initialization error. Offline test account 401/Realms and optional Iris warnings
+  remain expected. No rendered-pixel/FPS claim.
+- Final unprofiled comparison `build/optimization/20261013-151910`: three rotated
+  trials per case, Voxy port.9 shared by all cases, 4 logical CPUs and 4 GiB heap.
+  Median durable time 0.3=8.04s, 0.4=6.70s, Chunky+VoxyServer=6.81s. All LOD counts
+  2,515; target vanilla chunks 0 for LOD Only and 289 FULL for Chunky.
+  [Detailed phase report](benchmark/PHASE_OPTIMIZATION.md).
+
+### Prominence server snapshot smoke test
+
+`build/modpack-20261013-154416`: read-only snapshot of `C:/Prominence_2_4.1.3`,
+371 source mod JARs. CrashAssistant was excluded only from the disposable copy
+because it can close other helper processes/open a crash GUI. The two companion
+JARs were replaced only inside the fixture; LOD Only and instrumentation were added.
+Configs/data packs/default configs and Fabric loader 0.19.3 were retained. No
+production world was copied. Fresh seed 424242, loopback port 25589, GraalVM 25.4,
+4 logical CPUs, 6 GiB max heap. This is a functional test, not the 4 GiB benchmark.
+
+- Overworld 9 previews, Nether 1 preview and negative Overworld 9 previews PASS;
+  448 sections total. Cancellation and drained idle state PASS.
+- 180-second idle soak, Voxy/normal-world fence and shutdown PASS; exit 0.
+  No new ERROR body compared with the source pack's startup baseline, no LOD
+  generation failure and no target remote Overworld/Nether region/entity/POI files.
+- `result.json` keeps the existing 13 startup error lines (Eldritch End missing
+  attributes, missing data fixers, Worlds Together version parsing). They also
+  occur before Done in the live source log and were not hidden or repaired.
+  Lithium/BCLib client-type reflection warnings fall back to unoptimized behavior
+  and remain in the raw log. The test does not certify those third-party issues.
+- The pack independently creates 240 custom-dimension region files, including
+  its Vaaz worlds. They are recorded separately from the tested Overworld/Nether
+  jobs. The initial no-LOD boot `build/modpack-20261013-152957` already had the same
+  240 files. They are not evidence of this addon's FULL generation.
+- First attempt stopped its verifier on the existing startup error; second
+  `build/modpack-20261013-153505` completed generation/soak/shutdown but failed an
+  overly broad region check that included those custom worlds. Neither was
+  reported as a full PASS. The corrected final fixture above passed.
+
+This adds real modpack server smoke coverage. It is not long player-load,
+all-biome/all-seed/custom-generator, full-decoration equivalence, whole-pack
+client/shader or FPS validation. Large Nether crop support and cross-batch terrain
+reuse remain conservative limitations.

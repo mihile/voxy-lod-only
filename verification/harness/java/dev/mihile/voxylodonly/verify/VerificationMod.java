@@ -17,6 +17,75 @@ public class VerificationMod implements ModInitializer {
     @Override public void onInitialize() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) -> {
             var root = Commands.literal("lodonlytest").requires(source -> source.hasPermission(4));
+            root.then(Commands.literal("structurecompat").executes(ctx -> {
+                try { dev.mihile.voxylodonly.StructureCompatibilityVerification.run(ctx.getSource().getLevel()); }
+                catch (Exception e) { throw new IllegalStateException("Structure compatibility verification failed",e); }
+                return 1;
+            }));
+            root.then(Commands.literal("structurefingerprint").executes(ctx -> {
+                try {
+                    var level=ctx.getSource().getLevel();var generator=level.getChunkSource().getGenerator();
+                    var structureRegistry=level.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.STRUCTURE);
+                    var digest=java.security.MessageDigest.getInstance("SHA-256");int pieces=0;
+                    for (String path:java.util.List.of("catacombs","light_temple")) {
+                        var structure=structureRegistry.get(new net.minecraft.resources.ResourceLocation("betterarcheology",path));
+                        if (structure==null) throw new IllegalStateException("Missing test structure "+path);
+                        for (var pos:java.util.List.of(new net.minecraft.world.level.ChunkPos(128,128),new net.minecraft.world.level.ChunkPos(-128,-128))) {
+                            net.minecraft.world.level.levelgen.structure.StructureStart start;
+                            try (var guard=GenerationGuard.enter()) {
+                                start=structure.generate(level.registryAccess(),generator,generator.getBiomeSource(),level.getChunkSource().randomState(),
+                                        level.getStructureManager(),level.getSeed(),pos,0,level,biome -> true);
+                            }
+                            if (!start.isValid()) throw new IllegalStateException("Forced structure invalid "+path+":"+pos);
+                            for (var piece:start.getPieces()) {
+                                var tag=piece.createTag(net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext.fromLevel(level));
+                                digest.update(tag.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));pieces++;
+                            }
+                        }
+                    }
+                    LoggerFactory.getLogger("lod_only_verification").info("VERIFY_STRUCTURE_FINGERPRINT pieces={} sha256={}",pieces,java.util.HexFormat.of().formatHex(digest.digest()));
+                } catch (Exception e) { throw new IllegalStateException("Structure fingerprint failed",e); }
+                return 1;
+            }));
+            root.then(Commands.literal("terrainfingerprint").executes(ctx -> {
+                try {
+                    var digest=java.security.MessageDigest.getInstance("SHA-256");long voxels=0;
+                    var states=new java.util.IdentityHashMap<net.minecraft.world.level.block.state.BlockState,byte[]>();
+                    var biomes=new java.util.IdentityHashMap<net.minecraft.world.level.biome.Biome,byte[]>();
+                    for (var dimension:java.util.List.of(net.minecraft.world.level.Level.OVERWORLD,net.minecraft.world.level.Level.NETHER)) {
+                        var level=ctx.getSource().getServer().getLevel(dimension);
+                        var eligible=new java.util.HashSet<Long>();
+                        for(int z=128;z<131;z++) for(int x=128;x<131;x++) eligible.add(net.minecraft.world.level.ChunkPos.asLong(x,z));
+                        var batch=new InMemoryGenerator(level,()->false,Runnable::run,1,4).generate(32,32,eligible,true);
+                        for (var chunk:batch.output()) {
+                          var blockDigest=java.security.MessageDigest.getInstance("SHA-256");
+                          var biomeDigest=java.security.MessageDigest.getInstance("SHA-256");
+                          var lightDigest=java.security.MessageDigest.getInstance("SHA-256");
+                          for(int s=0;s<chunk.getSections().length;s++) {
+                            var source=chunk.getSection(s);var pos=net.minecraft.core.SectionPos.of(chunk.getPos(),chunk.getMinSection()+s);
+                            var sky=batch.light().getLayerListener(net.minecraft.world.level.LightLayer.SKY).getDataLayerData(pos);
+                            var block=batch.light().getLayerListener(net.minecraft.world.level.LightLayer.BLOCK).getDataLayerData(pos);
+                            for(int y=0;y<16;y++) for(int z=0;z<16;z++) for(int x=0;x<16;x++) {
+                                byte[] stateBytes=states.computeIfAbsent(source.getBlockState(x,y,z),state -> {
+                                    var properties=new java.util.TreeMap<String,String>();
+                                    state.getValues().forEach((property,value)->properties.put(property.getName(),value.toString()));
+                                    return (net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock())+properties.toString()+"\0").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                                });
+                                byte[] biomeBytes=biomes.computeIfAbsent(source.getBiomes().get(x>>2,y>>2,z>>2).value(),biome ->
+                                    (level.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.BIOME).getKey(biome).toString()+"\0").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                                byte lightByte=(byte)((sky==null?0:sky.get(x,y,z))|((block==null?0:block.get(x,y,z))<<4));
+                                digest.update(stateBytes);digest.update(biomeBytes);digest.update(lightByte);
+                                blockDigest.update(stateBytes);biomeDigest.update(biomeBytes);lightDigest.update(lightByte);voxels++;
+                            }
+                          }
+                          LoggerFactory.getLogger("lod_only_verification").info("VERIFY_TERRAIN_CHUNK dimension={} x={} z={} blocks={} biomes={} light={}",dimension.location(),chunk.getPos().x,chunk.getPos().z,
+                              java.util.HexFormat.of().formatHex(blockDigest.digest()),java.util.HexFormat.of().formatHex(biomeDigest.digest()),java.util.HexFormat.of().formatHex(lightDigest.digest()));
+                        }
+                    }
+                    LoggerFactory.getLogger("lod_only_verification").info("VERIFY_TERRAIN_FINGERPRINT voxels={} sha256={}",voxels,java.util.HexFormat.of().formatHex(digest.digest()));
+                } catch(Exception e) { throw new IllegalStateException("Terrain fingerprint failed",e); }
+                return 1;
+            }));
             root.then(Commands.literal("conversion").executes(ctx -> {
                 var bridge=FabricLoader.getInstance().getEntrypoints("main",ModInitializer.class).stream()
                         .filter(Voxyserver.class::isInstance).map(Voxyserver.class::cast).findFirst().orElseThrow();
@@ -32,7 +101,7 @@ public class VerificationMod implements ModInitializer {
             root.then(Commands.literal("parallel").executes(ctx -> {
                 var server = ctx.getSource().getServer();
                 Thread checker = new Thread(() -> {
-                    var pool = java.util.concurrent.Executors.newFixedThreadPool(3);
+                    var pool = java.util.concurrent.Executors.newFixedThreadPool(4);
                     try {
                         verifyTemplateCaches(pool);
                         for (int tileSize : new int[]{4, 8, 16, 32}) for (var dimension : java.util.List.of(net.minecraft.world.level.Level.OVERWORLD, net.minecraft.world.level.Level.NETHER)) {
@@ -40,8 +109,8 @@ public class VerificationMod implements ModInitializer {
                             var eligible = new java.util.HashSet<Long>();
                             for (int z = 128; z < 128+tileSize; z++) for (int x = 128; x < 128+tileSize; x++)
                                 eligible.add(net.minecraft.world.level.ChunkPos.asLong(x, z));
-                            var serial = new InMemoryGenerator(level, () -> false, Runnable::run, 1, tileSize).generate(128/tileSize, 128/tileSize, eligible, true);
-                            var parallel = new InMemoryGenerator(level, () -> false, pool, 3, tileSize).generate(128/tileSize, 128/tileSize, eligible, true);
+                            var serial = new InMemoryGenerator(level, () -> false, Runnable::run, 1, tileSize,false).generate(128/tileSize, 128/tileSize, eligible, true);
+                            var parallel = new InMemoryGenerator(level, () -> false, pool, 4, tileSize,true).generate(128/tileSize, 128/tileSize, eligible, true);
                             if (serial.output().size() != tileSize*tileSize || parallel.output().size() != tileSize*tileSize) throw new IllegalStateException("Missing output");
                             long checked = 0;
                             for (int c = 0; c < tileSize*tileSize; c++) {
@@ -69,7 +138,7 @@ public class VerificationMod implements ModInitializer {
                             // biomes and light. This catches accidentally removing a dependency halo.
                             for (int offset : new int[]{0,tileSize-1}) {
                                 var corner = java.util.Set.of(net.minecraft.world.level.ChunkPos.asLong(128+offset,128+offset));
-                                var cropped = new InMemoryGenerator(level, () -> false, pool, 3, tileSize)
+                                var cropped = new InMemoryGenerator(level, () -> false, pool, 4, tileSize,true)
                                         .generate(128/tileSize,128/tileSize,corner,true);
                                 if (cropped.output().size()!=1) throw new IllegalStateException("Crop missing output");
                                 compareCorner(serial, cropped);

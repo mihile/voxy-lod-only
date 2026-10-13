@@ -35,3 +35,18 @@ unlockWrite가 있고 예외 해제 경로가 없는 것을 확인했습니다.
 > 지우거나 다른 프로세스의 잠금을 강제로 해제하지 말고, 수정 JAR은 별도로 빌드해줘.
 
 이번 작업에서는 Voxy 본체와 VoxyServer JAR을 변경하지 않았습니다.
+
+## 후속 수정: Voxy port.9 (2026-10-13)
+
+위 문단은 LOD Only 0.3 최적화 당시 기록입니다. 후속 작업에서 Voxy 본체의
+잠금 finally 해제, 실패한 엔진 생성의 저장소 정리, RocksDB 초기화/flush 실패의
+네이티브 자원 정리를 수정했습니다. VoxyServer port.1 바이너리는 변경하지 않았습니다.
+
+별도 port.9 JAR SHA-256: `12cb5ce5f0ef90d6e8ed095bcbdd7143f7a81286a79f6bfd78d49beffbd7228b`.
+GraalVM 25.4 JUnit 9개 PASS. 실제 remapped Fabric 서버 5회 시작마다 실패 처리 7개 PASS,
+LOD 저장/변환/취소/종료/재시작/실제 청크 경쟁 처리 PASS. 그래픽 클라이언트도 PASS,
+종료 후 inFlight=0, conversionTasks=0, 서버/클라이언트 종료 코드 0.
+
+port.9는 별도 로컬 검증 빌드이며 이 저장소와 릴리스에 포함하지 않습니다.
+최초 파일 시스템 잠금의 원인은 여전히 미확정이며, 이번 수정은 저장소 열기 실패가
+서버 전체의 영구 잠금으로 번지지 않도록 합니다. 운영 저장소/JAR 적용은 하지 않았습니다.

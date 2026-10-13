@@ -1,0 +1,48 @@
+{
+  "session": "build\\optimization\\20261013-151910",
+  "companion_voxy": {
+    "path": "C:\\Users\\maste\\Desktop\\tool\\Vibe\\voxy 1.20.1\\build\\libs\\voxy-0.2.20-beta+1.20.1-port.9-33c0dff7.jar",
+    "sha256": "12cb5ce5f0ef90d6e8ed095bcbdd7143f7a81286a79f6bfd78d49beffbd7228b"
+  },
+  "cases": {
+    "v03-graal": {
+      "durable_seconds": 8.042793400003575,
+      "generation_seconds": 7.7082248000078835,
+      "cpu_seconds": 20.234375,
+      "cpu_budget_percent": 64.08990799221208,
+      "peak_rss_gib": 2.44970703125,
+      "mean_mspt": 1.0214223375,
+      "duration_range": [
+        7.8929646000033244,
+        8.093246000004001
+      ]
+    },
+    "v04-graal": {
+      "durable_seconds": 6.696317900001304,
+      "generation_seconds": 6.366290200006915,
+      "cpu_seconds": 21.0,
+      "cpu_budget_percent": 77.03048780447283,
+      "peak_rss_gib": 2.462230682373047,
+      "mean_mspt": 0.9407959785714286,
+      "duration_range": [
+        6.693778199987719,
+        6.885590399993816
+      ]
+    },
+    "chunky-graal": {
+      "durable_seconds": 6.814195500017377,
+      "generation_seconds": 5.985070700000506,
+      "cpu_seconds": 21.859375,
+      "cpu_budget_percent": 80.19793018832618,
+      "peak_rss_gib": 2.4474716186523438,
+      "mean_mspt": 3.1616909,
+      "duration_range": [
+        6.5841949000023305,
+        6.855529299995396
+      ]
+    }
+  },
+  "v04_time_reduction_percent": 16.74139111918096,
+  "v04_cpu_work_change_percent": 3.7837837837837895,
+  "v04_vs_chunky_duration_change_percent": -1.7298828602110405
+}

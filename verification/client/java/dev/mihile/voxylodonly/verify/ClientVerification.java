@@ -26,7 +26,7 @@ public class ClientVerification implements ClientModInitializer {
     @Override public void onInitializeClient() {
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
             try {
-                if ((System.nanoTime() - start) / 1e9 > 160) throw new AssertionError("Client timeout phase " + phase);
+                if ((System.nanoTime() - start) / 1e9 > (Boolean.getBoolean("voxy.lod.activitytest") ? 300 : 160)) throw new AssertionError("Client timeout phase " + phase);
                 switch (phase) {
                     case 0 -> {
                         if (mc.getOverlay() == null && elapsed() > 2) {
@@ -63,8 +63,11 @@ public class ClientVerification implements ClientModInitializer {
                         require(!instance.getStorageBasePath().toString().contains("UNKNOWN"), "UNKNOWN cache root");
                         List<String> debug = new ArrayList<>(); renderer.addDebugInfo(debug);
                         log("REMOTE_LOD vanillaChunkAbsent=true nonAir=" + nonAir + " renderer=" + String.join(" | ", debug));
-                        mc.getConnection().sendCommand("voxylodonly automatic on");
-                        next(3);
+                        if (Boolean.getBoolean("voxy.lod.activitytest")) {
+                            log("ACTIVITY_READY"); next(10);
+                        } else {
+                            mc.getConnection().sendCommand("voxylodonly automatic on"); next(3);
+                        }
                     }
                     case 3 -> {
                         if (elapsed() < 12) return;
@@ -77,6 +80,28 @@ public class ClientVerification implements ClientModInitializer {
                         log("PASS");
                         Files.write(mc.gameDirectory.toPath().resolve("lod-only-client-result.txt"), results);
                         next(5); mc.stop();
+                    }
+                    case 10, 13 -> {
+                        Path trigger = mc.gameDirectory.toPath().resolve("activity-disconnect");
+                        if (!Files.exists(trigger)) return;
+                        Files.delete(trigger);
+                        mc.getConnection().getConnection().disconnect(net.minecraft.network.chat.Component.literal("activity verification"));
+                        mc.clearLevel(); mc.setScreen(new TitleScreen());
+                        log("ACTIVITY_DISCONNECTED"); next(11);
+                    }
+                    case 11 -> {
+                        require(VoxyCommon.getInstance() == null && !ClientSessionEvents.inSession,"session survived policy disconnect");
+                        if (Files.exists(mc.gameDirectory.toPath().resolve("activity-finish"))) { next(4); return; }
+                        Path trigger = mc.gameDirectory.toPath().resolve("activity-reconnect");
+                        if (!Files.exists(trigger)) return;
+                        Files.delete(trigger);
+                        ConnectScreen.startConnecting(new TitleScreen(), mc, ServerAddress.parseString("127.0.0.1:25587"),
+                                new ServerData("isolated", "127.0.0.1:25587", false), false); next(12);
+                    }
+                    case 12 -> {
+                        if (mc.player == null || mc.level == null || !ClientLodSettings.isProtocolOk() || elapsed() < 6) return;
+                        require(!((VoxyClientInstance)VoxyCommon.getInstance()).getStorageBasePath().toString().contains("UNKNOWN"), "UNKNOWN reconnect root");
+                        log("ACTIVITY_RECONNECTED"); next(13);
                     }
                 }
             } catch (Throwable failure) {
