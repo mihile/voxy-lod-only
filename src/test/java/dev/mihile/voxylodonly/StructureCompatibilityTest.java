@@ -35,4 +35,30 @@ public class StructureCompatibilityTest {
         tag.putString("id","minecraft:pig");assertFalse(StructureCompatibility.missingOptional(template,tag,id -> false));
         tag.putString("id","other:unknown");assertFalse(StructureCompatibility.missingOptional(template,tag,id -> false));
     }
+    @Test public void cabinVillagerPoolRepairPreservesAllOtherFieldsAndIsIdempotent() {
+        for (int intersection:new int[]{2,4}) {
+            var template=new ResourceLocation("integrated_villages:cabin_village/path/cabin_village_intersection"+intersection);
+            var tag=new CompoundTag();tag.putString("id","minecraft:jigsaw");
+            tag.putString("pool","integrated_villages:cabin_village/villager_random");
+            tag.putString("name","integrated_villages:villager");tag.putString("target","integrated_villages:villager");
+            tag.putString("joint","rollable");tag.putString("final_state","minecraft:air");
+            var expected=tag.copy();expected.putString("pool","integrated_villages:cabin_village/mobs/villager_random");
+            assertTrue(StructureCompatibility.repairVillagePool(template,tag));assertEquals(expected,tag);
+            assertFalse(StructureCompatibility.repairVillagePool(template,tag));assertEquals(expected,tag);
+        }
+    }
+    @Test public void villagePoolRepairIgnoresUnrelatedTemplatesAndValidConnections() {
+        var template=new ResourceLocation("integrated_villages:cabin_village/path/cabin_village_intersection2");
+        var tag=new CompoundTag();tag.putString("id","minecraft:jigsaw");
+        tag.putString("pool","integrated_villages:cabin_village/villager_random");
+        var unchanged=tag.copy();
+        assertFalse(StructureCompatibility.repairVillagePool(new ResourceLocation("other:cabin_village/path/cabin_village_intersection2"),tag));
+        assertFalse(StructureCompatibility.repairVillagePool(new ResourceLocation("integrated_villages:cabin_village/path/cabin_village_intersection1"),tag));
+        assertEquals(unchanged,tag);
+        tag.putString("pool","integrated_villages:cabin_village/villager");unchanged=tag.copy();
+        assertFalse(StructureCompatibility.repairVillagePool(template,tag));assertEquals(unchanged,tag);
+        tag.putString("pool","integrated_villages:cabin_village/villager_random");tag.putString("id","minecraft:chest");unchanged=tag.copy();
+        assertFalse(StructureCompatibility.repairVillagePool(template,tag));assertEquals(unchanged,tag);
+        assertFalse(StructureCompatibility.repairVillagePool(template,null));
+    }
 }

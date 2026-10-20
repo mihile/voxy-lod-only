@@ -17,6 +17,13 @@ public class VerificationMod implements ModInitializer {
     @Override public void onInitialize() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) -> {
             var root = Commands.literal("lodonlytest").requires(source -> source.hasPermission(4));
+            root.then(Commands.literal("tileaccuracy").executes(ctx -> {
+                var level=ctx.getSource().getLevel();
+                Thread checker=new Thread(() -> {
+                    try { dev.mihile.voxylodonly.TileAccuracyVerification.run(level); }
+                    catch(Throwable error) { LoggerFactory.getLogger("lod_only_verification").error("VERIFY_TILE_ACCURACY FAILURE",error); }
+                },"LOD tile accuracy verifier");checker.setDaemon(true);checker.start();return 1;
+            }));
             root.then(Commands.literal("structurecompat").executes(ctx -> {
                 try { dev.mihile.voxylodonly.StructureCompatibilityVerification.run(ctx.getSource().getLevel()); }
                 catch (Exception e) { throw new IllegalStateException("Structure compatibility verification failed",e); }

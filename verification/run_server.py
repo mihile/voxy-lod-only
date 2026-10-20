@@ -13,7 +13,7 @@ for name in ['libraries', 'fabric-server-launch.jar', 'fabric-server-launcher.pr
     else: shutil.copy2(src, dst)
 (fixture/'mods').mkdir(); (fixture/'config').mkdir()
 for src in [Path(os.environ.get('VOXY_TEST_JAR', str(root/'libs/voxy.jar'))), root/'libs/voxyserver.jar',
-            Path(os.environ.get('VOXY_LOD_TEST_JAR', str(root/'build/libs/VoxyLodOnly-0.8.0+1.20.1.jar'))), root/'build/verification/lod-only-verification.jar',
+            Path(os.environ.get('VOXY_LOD_TEST_JAR', str(root/'build/libs/VoxyLodOnly-0.9.0+1.20.1.jar'))), root/'build/verification/lod-only-verification.jar',
             next((template/'mods').glob('fabric-api-*.jar'))]: shutil.copy2(src, fixture/'mods'/src.name)
 storage_test_jar = os.environ.get('VOXY_STORAGE_TEST_JAR')
 if storage_test_jar: shutil.copy2(storage_test_jar, fixture/'mods'/Path(storage_test_jar).name)
@@ -50,7 +50,7 @@ class Server:
             try: line=self.queue.get(timeout=.5)
             except queue.Empty: continue
             if any(x in line for x in ['ERROR','Exception','LOD Only','VERIFY_','Done (']): print(line.rstrip(),flush=True)
-            if 'VERIFY_PARALLEL FAILURE' in line: raise RuntimeError(line)
+            if 'VERIFY_PARALLEL FAILURE' in line or 'VERIFY_TILE_ACCURACY FAILURE' in line: raise RuntimeError(line)
             if pattern in line:return line
         self.command('voxylodonly status')
         raise TimeoutError(pattern)
@@ -191,6 +191,8 @@ try:
         print('AREA_COMMANDS PASS circle='+str(len(circle))+' square='+str(len(square))+' fixture='+str(fixture),flush=True)
         sys.exit(0)
     server.command('lodonlytest guard');server.wait('VERIFY_GUARD PASS')
+    if '--tile-accuracy' in sys.argv:
+        server.command('lodonlytest tileaccuracy');server.wait('VERIFY_TILE_ACCURACY chunks=',600)
     if '--skip-parallel' not in sys.argv:
         server.command('lodonlytest parallel');server.wait('VERIFY_PARALLEL_ALL PASS',600)
     if '--parallel-only' in sys.argv:

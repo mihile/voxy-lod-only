@@ -4,3 +4,4 @@ run/
 libs/
 *.log
 __pycache__/
+output/

@@ -15,7 +15,7 @@ Stop the server, then place `VoxyLodOnly-…jar` from the
 Also install:
 
 - [Voxy 1.20.1 port.8](https://github.com/mihile/voxy/releases/tag/v0.2.20-1.20.1-port.8)
-- [VoxyServer 1.2.4+1.20.1-port.1](https://github.com/mihile/VoxyServer/releases/tag/v1.2.4-1.20.1-port.1)
+- [VoxyServer 1.2.4+1.20.1-port.2](https://github.com/mihile/VoxyServer/releases/tag/v1.2.4-1.20.1-port.2)
 - Fabric API **0.92.6+1.20.1**, Fabric Loader **0.17.2 or newer**, Java **17 or newer**
 
 Clients need **Voxy + VoxyServer + Sodium**.

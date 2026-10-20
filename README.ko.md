@@ -14,7 +14,7 @@ Minecraft **1.20.1 · Fabric · 전용 서버**용입니다. 생성한 지형은
 `VoxyLodOnly-…jar`를 서버의 `mods` 폴더에 넣으세요. 함께 필요한 항목:
 
 - [Voxy 1.20.1 port.8](https://github.com/mihile/voxy/releases/tag/v0.2.20-1.20.1-port.8)
-- [VoxyServer 1.2.4+1.20.1-port.1](https://github.com/mihile/VoxyServer/releases/tag/v1.2.4-1.20.1-port.1)
+- [VoxyServer 1.2.4+1.20.1-port.2](https://github.com/mihile/VoxyServer/releases/tag/v1.2.4-1.20.1-port.2)
 - Fabric API **0.92.6+1.20.1**, Fabric Loader **0.17.2 이상**, Java **17 이상**
 
 클라이언트에는 **Voxy + VoxyServer + Sodium**이 필요합니다.

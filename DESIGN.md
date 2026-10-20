@@ -1,5 +1,43 @@
 # Generation and storage ownership
 
+## 0.9 development: resource ownership and multiplayer scheduling
+
+One global slot now spans NBT reads, terrain generation, completed output,
+conversion, and cancellation drainage. Per-session cursors receive one tile per
+round; moving eight chunks replaces only that player's cursor, while smaller
+movements steer the cursor's forward direction in place using discrete 8-sector
+compass quantization so minor angle changes do not repeatedly re-sort remaining
+tiles. Automatic plans order full tiles outside the real-chunk demand envelope
+(`viewDistance + 2`) and within the player's forward flight cone ahead of partial
+boundary slivers and inner tiles, and skip already-completed or covered tiles
+within the same turn without consuming round-robin service. Tile scanning on the
+server thread is bounded by a per-tick time budget and caches `.mca` region file
+existence once per 32x32 region within a batch. Requests never construct a
+bounding rectangle between players. Reservations include dimension, chunk
+position and structure mode and outlive cancellation until work drains.
+
+The occupied worker ceiling is two and the tile ceiling is eight, including for
+legacy aggressive settings. Halo widths, structure generation, lighting, the
+non-Overworld context restriction and checkpoint formats are unchanged;
+`CompletionLedger` stores completed positions in a primitive `LongOpenHashSet`
+and sorts primitive `long[]` arrays when saving. `resourceBudgetMiB` is a
+conservative grid/output reservation estimate, and starting a new batch also
+requires live heap headroom to cover the batch's estimated footprint plus a
+64 MiB safety margin. Heap pressure, real-player 3x3 chunk readiness, chunk task
+backlog and tick time gate owned workers at chunk/stage boundaries through a
+single volatile immutable `ResourceGovernor.State` snapshot; step pacing adapts
+smoothly using per-step thread CPU cost and recent heap/tick headroom.Repeated
+pressure aborts on the same tile apply exponential retry backoff using compact
+coordinates and yield round-robin service to other players while cooling down,
+recording discarded generation time. Conversion bounds both in-flight tasks and
+retained completed results, and propagates per-chunk cancellation when a real
+chunk supersedes a queued conversion so work stops at the next section boundary.
+Neighborhood lists and fastutil backing arrays are trimmed before/after lighting,
+and converted `ProtoChunk`s and `LevelLightEngine` references are released
+incrementally as conversion completes. Only background workers park; server ticks
+continue cancellation and lease cleanup. Existing shutdown drainage still
+precedes Voxy storage closure.
+
 0.8 cancels StructureTemplate.placeEntities only inside the private generation
 guard, before creating/deserializing any template entity. Ordinary placement
 keeps its entity path. Known-template loading repairs a confirmed empty

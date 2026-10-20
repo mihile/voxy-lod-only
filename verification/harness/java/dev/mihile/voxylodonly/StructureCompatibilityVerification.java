@@ -69,7 +69,7 @@ public final class StructureCompatibilityVerification {
         var originalLoader=(java.util.function.Function<ResourceLocation,Optional<StructureTemplate>>)loaderMethod.invoke(resourceSource);
         var resources=level.getServer().getResourceManager().listResources("structures",id -> id.getPath().endsWith(".nbt")
                 && (id.getNamespace().equals("betterarcheology") || id.getNamespace().equals("integrated_villages")));
-        int checked=0,repairs=0,removed=0;
+        int checked=0,repairs=0,villageRepairs=0,removed=0;
         for (var entry:resources.entrySet()) {
             var resourceId=entry.getKey();var id=new ResourceLocation(resourceId.getNamespace(),resourceId.getPath().substring(11,resourceId.getPath().length()-4));
             StructureTemplate original=originalLoader.apply(id).orElseThrow();
@@ -86,6 +86,7 @@ public final class StructureCompatibilityVerification {
                     var x=left.get(i);var y=right.get(i);require(x.pos().equals(y.pos()) && x.state()==y.state(),"Changed terrain block "+id);
                     var expected=x.nbt()==null?null:x.nbt().copy();
                     if (x.state().is(Blocks.JIGSAW) && StructureCompatibility.repairTerminal(id,expected)) repairs++;
+                    if (x.state().is(Blocks.JIGSAW) && StructureCompatibility.repairVillagePool(id,expected)) villageRepairs++;
                     require(Objects.equals(expected,y.nbt()),"Unexpected NBT mutation "+id+" pos="+x.pos()+" expected="+expected+" actual="+y.nbt());
                 }
             }
@@ -98,6 +99,6 @@ public final class StructureCompatibilityVerification {
             }
             checked++;
         }
-        LoggerFactory.getLogger("lod_only_verification").info("VERIFY_STRUCTURE_RESOURCES templates={} terminalRepairs={} missingOptionalRemoved={} exactBlocksAndOtherNBT PASS",checked,repairs,removed);
+        LoggerFactory.getLogger("lod_only_verification").info("VERIFY_STRUCTURE_RESOURCES templates={} terminalRepairs={} villagePoolRepairs={} missingOptionalRemoved={} exactBlocksAndOtherNBT PASS",checked,repairs,villageRepairs,removed);
     }
 }

@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"lod_flight_verification","version":"1","name":"Isolated flight measurements","environment":"server","entrypoints":{"main":["dev.mihile.voxylodonly.flight.FlightVerificationMod"]},"mixins":["flight.mixins.json"],"depends":{"fabric-api":"*","minecraft":"1.20.1"}}

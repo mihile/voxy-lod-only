@@ -41,7 +41,7 @@ def main():
         if jar.name.lower().startswith(('voxy-','voxyserver-','voxylodonly-')):continue
         shutil.copy2(jar,folder/'mods'/jar.name)
     companion=Path(bench.os.environ.get('VOXY_TEST_JAR',str(ROOT/'libs/voxy.jar')))
-    for jar in [companion,Path(os.environ.get('VOXY_SERVER_TEST_JAR',str(ROOT/'libs/voxyserver.jar'))),Path(os.environ.get('VOXY_LOD_TEST_JAR',str(ROOT/'build/libs/VoxyLodOnly-0.8.0+1.20.1.jar'))),ROOT/'build/benchmark/lod-benchmark.jar']:
+    for jar in [companion,Path(os.environ.get('VOXY_SERVER_TEST_JAR',str(ROOT/'libs/voxyserver.jar'))),Path(os.environ.get('VOXY_LOD_TEST_JAR',str(ROOT/'build/libs/VoxyLodOnly-0.9.0+1.20.1.jar'))),ROOT/'build/benchmark/lod-benchmark.jar']:
         shutil.copy2(jar,folder/'mods'/jar.name)
     if args.structure_compat:shutil.copy2(ROOT/'build/verification/lod-only-verification.jar',folder/'mods/lod-only-verification.jar')
     (folder/'eula.txt').write_text('eula=true\n')

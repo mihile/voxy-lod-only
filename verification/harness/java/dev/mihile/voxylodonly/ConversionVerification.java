@@ -22,7 +22,11 @@ public final class ConversionVerification {
         var queued=new ArrayDeque<Runnable>();
         var cancelled=new PreparedLodBatch(world,batch,()->false,queued::addLast);
         cancelled.fill();
-        if(queued.size()!=PreparedLodBatch.WINDOW) throw new IllegalStateException("Unbounded conversion queue");
+        if(queued.size()!=PreparedLodBatch.MAX_RETAINED_RESULTS || cancelled.reservedCount()!=PreparedLodBatch.MAX_RETAINED_RESULTS)
+            throw new IllegalStateException("Unbounded conversion result reservation");
+        cancelled.skip();
+        if(cancelled.reservedCount()!=PreparedLodBatch.MAX_RETAINED_RESULTS)
+            throw new IllegalStateException("Skipped conversion did not replenish reserved slot");
         cancelled.close();
         if(cancelled.drained() || refs.get()!=initial+1) throw new IllegalStateException("Conversion lease released before workers drained");
         while(!queued.isEmpty()) queued.removeFirst().run();

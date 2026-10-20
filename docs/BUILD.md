@@ -11,7 +11,7 @@ GraalVM은 필수 빌드 조건이 아닙니다.
 | 릴리스 | 저장 위치 | SHA-256 |
 | --- | --- | --- |
 | [Voxy port.8](https://github.com/mihile/voxy/releases/tag/v0.2.20-1.20.1-port.8) | `libs/voxy.jar` | `a23d4a09525e578c90a41741cb2a68c75b63162eeb905947f06447b08f4db57f` |
-| [VoxyServer port.1](https://github.com/mihile/VoxyServer/releases/tag/v1.2.4-1.20.1-port.1) | `libs/voxyserver.jar` | `1bd0a5ceb5fd5ec8ad944b57966662c4f6c0cd74c7121da8d6211584240b3dc5` |
+| [VoxyServer port.2](https://github.com/mihile/VoxyServer/releases/tag/v1.2.4-1.20.1-port.2) | `libs/voxyserver.jar` | `3336f95670be793e51e7c3044469909009108abeb45f3e671a487e3d4e35ea4a` |
 
 `libs` 폴더는 직접 만들면 됩니다. Minecraft, Fabric API, Fabric Loader 등 나머지
 빌드 의존성은 Gradle이 내려받습니다. `JAVA_HOME`은 사용할 JDK를 가리켜야 합니다.

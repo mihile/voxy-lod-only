@@ -2,6 +2,22 @@
   "required": true,
   "package": "dev.mihile.voxylodonly.mixin",
   "compatibilityLevel": "JAVA_17",
-  "mixins": ["VoxyServerAccessor", "ChunkMapAccessor", "LevelGuardMixin", "ServerLevelGuardMixin", "ServerChunkCacheGuardMixin", "MinecraftServerMixin", "NoiseExecutorMixin", "StructurePaletteCacheMixin", "StructureTemplateMixin", "StructureTemplateManagerMixin"],
+  "mixins": [
+    "VoxyServerAccessor",
+    "ChunkMapAccessor",
+    "LevelGuardMixin",
+    "ServerLevelGuardMixin",
+    "ServerChunkCacheGuardMixin",
+    "MinecraftServerMixin",
+    "NoiseExecutorMixin",
+    "NoiseChunkMixin",
+    "HolderHolderMixin",
+    "SplineCoordinateMixin",
+    "SplineDensityFunctionMixin",
+    "CubicSplineMultipointMixin",
+    "StructurePaletteCacheMixin",
+    "StructureTemplateMixin",
+    "StructureTemplateManagerMixin"
+  ],
   "injectors": {"defaultRequire": 1}
 }

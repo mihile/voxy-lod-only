@@ -56,11 +56,11 @@ public class CorePolicyTest {
         assertTrue(pacer.admit(10_250_000_000L,0));
     }
     @Test public void automaticWorkerBudgetReservesCapacityOnlyWhenNeeded() {
-        assertEquals(4,LodOnlyConfig.automaticWorkers(4,false));
-        assertEquals(3,LodOnlyConfig.automaticWorkers(4,true));
+        assertEquals(1,LodOnlyConfig.automaticWorkers(4,false));
+        assertEquals(1,LodOnlyConfig.automaticWorkers(4,true));
         assertEquals(1,LodOnlyConfig.automaticWorkers(1,true));
-        assertEquals(8,LodOnlyConfig.automaticWorkers(16,false));
-        assertEquals(8,LodOnlyConfig.automaticWorkers(16,true));
+        assertEquals(4,LodOnlyConfig.automaticWorkers(16,false));
+        assertEquals(2,LodOnlyConfig.automaticWorkers(16,true));
         LodOnlyConfig explicit=new LodOnlyConfig();explicit.generationThreads=2;
         assertEquals(2,explicit.activeGenerationThreads(false));
         assertEquals(2,explicit.activeGenerationThreads(true));

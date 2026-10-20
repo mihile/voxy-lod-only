@@ -5,15 +5,16 @@ Minecraft **1.20.1 / Fabric / Java 17**용 원거리 LOD 생성 모드입니다.
 지형을 생성합니다. 변환된 LOD는 **VoxyServer의 기존 저장소와 전송 경로**를 사용합니다.
 실제로 플레이어가 방문하는 청크의 일반 월드 저장 동작은 유지합니다.
 
-현재 버전: `0.8.0+1.20.1` — 구조물 데이터의 알려진 잘못된 참조와 불필요한 LOD 엔티티 처리를 개선했습니다.
+현재 정식 배포판: `0.9.0+1.20.1`.
+자원 제한과 다중 플레이어 비교는 [검증 기록](../verification/FLIGHT_PERFORMANCE.md)을 참고하세요.
 
 ## 설치
 
-전용 서버 종료 후 기존 LOD Only JAR을 빼고 `mods`에 `VoxyLodOnly-0.8.0+1.20.1.jar`를 넣습니다.
+전용 서버 종료 후 기존 LOD Only JAR을 빼고 `mods`에 `VoxyLodOnly-0.9.0+1.20.1.jar`를 넣습니다.
 함께 필요한 모드:
 
 - [Voxy 1.20.1 port.8](https://github.com/mihile/voxy/releases/tag/v0.2.20-1.20.1-port.8).
-- [VoxyServer 1.2.4+1.20.1-port.1](https://github.com/mihile/VoxyServer/releases/tag/v1.2.4-1.20.1-port.1)
+- [VoxyServer 1.2.4+1.20.1-port.2](https://github.com/mihile/VoxyServer/releases/tag/v1.2.4-1.20.1-port.2)
 - Fabric API 0.92.6+1.20.1, Fabric Loader 0.17.2 이상
 
 클라이언트는 기존 Voxy + VoxyServer + Sodium 조합이면 됩니다.
@@ -24,7 +25,7 @@ VoxyServer의 port.2 우회 패치를 이 프로젝트로 복사하지 않았고
 
 1. 플레이어 주변의 작업 영역을 가까운 순서로 선택합니다. 기본 반경은 32청크입니다.
 2. 이미 저장된 일반 청크와 현재 로딩된 청크는 건너뜁니다. 기존 월드의 LOD 변환은 아래 import 명령을 사용합니다.
-3. 출력 영역을 최대 32×32청크로 묶되, 요청 시작점을 기준으로 나누고 실제 요청한 청크들의 경계에 맞춰 계산 범위를 줄입니다. 주변 생성용 이웃은 유지합니다. 계산 범위 축소는 오버월드에 적용하며 다른 차원은 기존 월드 격자 기준 최대 8×8 묶음으로 전체 문맥을 유지합니다. 독립적인 청크의 생성 단계는 병렬 처리하고, 이웃을 수정하는 장식과 조명은 순서를 유지합니다.
+3. 출력 영역을 기본 8×8청크로 묶습니다. 접속 중에는 최대 8×8, 빈 서버는 예약 예산 안에서 최대 16×16입니다. 요청 시작점을 기준으로 나누고 실제 요청한 청크들의 경계에 맞춰 계산 범위를 줄이되, 주변 생성용 이웃은 유지합니다. 계산 범위 축소는 오버월드에 적용하며 다른 차원은 기존 월드 격자 기준 최대 8×8 묶음으로 전체 문맥을 유지합니다. 독립적인 청크의 생성 단계는 병렬 처리하고, 이웃을 수정하는 장식과 조명은 순서를 유지합니다.
 4. 독립된 조명 엔진으로 하늘빛/블록빛을 계산합니다. 엔티티 생성과 일반 청크의 시뮬레이션은 실행하지 않습니다.
 5. 같은 작업자 풀에서 Voxy section 변환과 mip 계산을 병렬로 준비합니다. 준비 결과는 최대 16청크이며, 서버 틱이 실제 청크 로딩 여부를 다시 확인하고 시간 예산 안에서 반영합니다. 기본은 플레이 중 3ms, 플레이어가 없을 때 10ms입니다. VoxyServer가 저장과 전송을 담당합니다.
 6. 임시 청크 묶음을 해제합니다. 생성 도중 실제 청크가 로딩되었다면 그 위치의 LOD 적용을 중단합니다.
@@ -34,18 +35,19 @@ VoxyServer의 port.2 우회 패치를 이 프로젝트로 복사하지 않았고
 
 0.8은 LOD 생성 중 구조물의 엔티티 배치 단계를 건너뜁니다. 블록·바이옴·조명은 계속 생성하며,
 일반 월드에서 템플릿의 정상 엔티티 배치는 유지합니다. 해당 구조물 템플릿을 메모리 캐시에 처음 읽을 때
-다음 두 가지 알려진 데이터 문제도 보정합니다:
+다음 알려진 데이터 문제도 보정합니다:
 
 - BetterArcheology의 `catacombs/`·`light_temple/` 템플릿에서, `pool`·`target`이 모두 `minecraft:`인 jigsaw 종료 연결의 `pool`만 정상 `minecraft:empty`로 바꿉니다. 공기·철창·계단 등 최종 블록 지정은 그대로 유지합니다.
 - Integrated Villages 템플릿의 `quark:glass_frame`·`guardvillagers:guard`가 실제 엔티티 레지스트리에 없으면 해당 선택적 참조만 제외합니다. 등록되어 있거나 다른 종류인 엔티티는 유지합니다.
+- Integrated Villages 1.3.2의 `cabin_village/path/cabin_village_intersection2`·`intersection4`에 있는 잘못된 `cabin_village/villager_random` 풀 참조를 실제 `cabin_village/mobs/villager_random`으로 보정합니다. 기존 풀의 주민 종류·선택 가중치와 나머지 jigsaw NBT는 유지합니다.
 
 보정은 일반 구조물 생성에도 적용되며, 원본 JAR·데이터팩·월드 파일은 수정하지 않습니다.
 로그 필터로 WARN/ERROR를 숨기지 않습니다. 다른 잘못된 참조와 블록 엔티티 경고는 계속 표시합니다.
-`status`의 `terminalPoolsRepaired`, `optionalEntitiesRemoved`, `lodEntitiesSkipped`로 누적 처리량을 확인할 수 있습니다.
+`status`의 `terminalPoolsRepaired`, `villagePoolsRepaired`, `optionalEntitiesRemoved`, `lodEntitiesSkipped`로 누적 처리량을 확인할 수 있습니다.
 자동 작업은 기본적으로 요청 플레이어의 접속 해제, 차원 변경, 작업 범위 이탈 시 취소됩니다.
 `continueAutomaticWhenEmpty: true`이면 마지막 플레이어가 나간 뒤 현재 요청 영역을 이어서 처리할 수 있습니다.
 완료 후 빈 서버에서 새 중심 좌표를 임의로 선택하지 않습니다. 같은 UUID의 새 접속도 새 플레이어 객체로 구분하며 이전 자동 작업은 취소합니다.
-이미 완료한 자동 영역은 최소 100틱 뒤 다시 확인하여 매 틱 같은 영역을 검사하고 완료 로그를 반복하지 않습니다.
+완료된 자동 영역은 약 5초 뒤 다시 확인하여 매 틱 같은 영역을 검사하고 완료 로그를 반복하지 않습니다.
 수동 작업은 플레이어 없이도 실행할 수 있습니다.
 
 ## 명령
@@ -151,8 +153,11 @@ OP 레벨 2 이상이 필요합니다. 새 `/voxylod`는 블록 단위이고, �
   "cooldownTicks": 1,
   "commitChunksPerTick": 64,
   "generationThreads": 0,
-  "generationTileSize": 32,
-  "maxInFlightBatches": 2,
+  "generationTileSize": 8,
+  "maxInFlightBatches": 1,
+  "resourceBudgetMiB": 192,
+  "maxGenerationStepsPerSecond": 512,
+  "automaticRetargetChunks": 8,
   "commitBudgetMillis": 3,
   "idleCommitBudgetMillis": 10,
   "pauseAboveTickMillis": 45.0,
@@ -181,11 +186,16 @@ OP 레벨 2 이상이 필요합니다. 새 `/voxylod`는 블록 단위이고, �
 ```
 
 `dimensions`는 자동 생성 대상입니다. 수동 명령으로 다른 차원도 지정할 수 있습니다.
-`generationThreads: 0`은 JVM이 인식하는 CPU 수에 맞춰 최대 8개 작업자를 사용합니다.
-플레이어가 있으면 동시 작업자 상한은 CPU 수에서 하나를 뺀 값입니다.
+0.9 개발판에서 `generationThreads: 0`은 논리 CPU 수의 1/4을 기준으로 자동 선택합니다.
+명시적인 설정도 접속 중 최대 2개, 빈 서버 최대 4개의 전역 상한을 적용합니다.
 접속 상태가 바뀌면 생성과 변환의 공유 작업자 풀 상한도 바꿉니다. 이미 실행 중인 작업은 안전하게 끝나므로 감소가 즉시 모든 작업을 멈추지는 않습니다. VoxyServer의 저장/전송과 Minecraft 본체까지 포함한 전체 CPU 사용률 제한은 아닙니다.
 `generationTileSize`는 4, 8, 16 또는 32, `maxInFlightBatches`는 1 또는 2입니다.
-기존 설정에 명시된 8은 유지됩니다. 기본값은 32이며 설정을 바꾼 뒤 `/voxylod reload`로 적용할 수 있습니다.
+기본값은 타일 8, 배치 1입니다. 기존 16/32 및 배치 2도 읽지만 실제 유지 배치는 항상 하나이며,
+접속 중에는 타일을 최대 8로 제한합니다. 빈 서버도 최대 16이며 메모리 예약 예산에 따라 더 작아집니다.
+설정 파일을 덮어쓰지는 않습니다. `/voxylod reload`로 변경을 적용합니다.
+`resourceBudgetMiB: 192`는 halo와 출력의 예약 추정이며 외부 모드 캐시까지 포함한 정확한 힙 상한은 아닙니다.
+`maxGenerationStepsPerSecond: 512`는 생성 단계/청크 경계의 전역 페이싱이며 반영 속도와 별개입니다.
+`automaticRetargetChunks: 8`은 자동 요청 중심을 갱신할 이동 거리이며 속도에 따라 반경을 늘리지 않습니다.
 `commitChunksPerTick`은 1–64이며 기본 64입니다. 기존 값은 유지됩니다.
 플레이 중 `commitBudgetMillis: 3`은 유지하고, 별도 `idleCommitBudgetMillis: 10`은 플레이어가 없을 때만 사용합니다.
 idle 값도 3으로 지정하면 기존 시간 제한을 유지합니다. 각 section 뒤 시간 예산을 검사하므로 청크 수보다 시간 제한이 우선합니다.
@@ -205,15 +215,15 @@ idle 값도 3으로 지정하면 기존 시간 제한을 유지합니다. 각 se
 | 설정 | 의미 |
 |---|---|
 | `enabled` | `false`이면 새 배치 생성과 LOD 반영을 일시 중지합니다. 기존 작업 위치를 보존하고 상태가 바뀌면 이어갑니다. 취소/종료의 정리는 계속 수행합니다. |
-| `generationThreads` | 이 모드의 생성·변환 동시 작업자 1–8. 0은 CPU 기준 자동 선택. |
-| `maxChunksPerSecond` | 새 청크의 LOD 반영을 시작하는 간격을 제한합니다. 0은 별도 속도 제한 없음, 1–10000은 초당 목표 상한. 예: 10이면 최소 100ms 간격. |
+| `generationThreads` | 생성·변환 공유 작업자 요청 수. 실제 전역 상한은 접속 중 2, 빈 서버 4. 0은 보수적인 자동 선택. |
+| `maxChunksPerSecond` | LOD 반영 시작 간격. 0은 접속 중 8, 빈 서버 32청크/초의 기본 제한을 사용합니다. 명시한 1–10000 값은 유지합니다. |
 | `commitChunksPerTick` | 한 틱에 완료/건너뛰기 처리할 청크 수 1–64. |
 | `commitBudgetMillis` | 서버 틱에서 LOD 반영에 쓸 목표 시간 1–10ms. |
 | `cooldownTicks` | 배치 제출 간격. 최소 1틱. |
-| `pauseAboveTickMillis` | 서버 평균 틱 시간이 이 값보다 크면 생성 제출과 반영을 기다립니다. |
+| `pauseAboveTickMillis` | 직전 틱 또는 평균 틱 시간이 이 값을 넘으면 제출·변환·배경 생성의 다음 청크 경계에서 양보합니다. |
 
 예를 들어 기존 JSON에 아래 세 항목을 추가하면 플레이 중에는 작업자 1개·초당 10청크·1ms 예산,
-빈 서버에서는 작업자 4개·속도 제한 없이·10ms 예산으로 진행합니다:
+빈 서버에서는 작업자 4개·기본 반영 속도 제한·10ms 예산으로 진행합니다:
 
 ```json
 "continueAutomaticWhenEmpty": true,
@@ -275,7 +285,7 @@ Gradle 실행은 JDK 17 이상, 결과물은 Java 17입니다.
 .\gradlew.bat build
 ```
 
-결과: `build/libs/VoxyLodOnly-0.8.0+1.20.1.jar`.
+결과: `build/libs/VoxyLodOnly-0.9.0+1.20.1.jar`.
 `-sources.jar`와 `build/verification`의 검증 모드는 설치용 모드가 아닙니다.
 
 설계는 [DESIGN.md](../DESIGN.md), [검증 결과](../VALIDATION.md), 재현 가능한 검증 절차는 [verification/README.md](../verification/README.md)를 참고하세요.

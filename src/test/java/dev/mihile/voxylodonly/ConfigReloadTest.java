@@ -30,7 +30,8 @@ public class ConfigReloadTest {
         var original=new LodOnlyConfig();original.withPlayers.generationThreads=1;
         var next=original.withRadius(64);next.withPlayers.generationThreads=4;
         assertEquals(32,original.radiusChunks);assertEquals(1,original.policy(true).generationThreads());
-        assertEquals(64,next.radiusChunks);assertEquals(4,next.policy(true).generationThreads());
+        assertEquals(64,next.radiusChunks);assertEquals(4,(int)next.withPlayers.generationThreads);
+        assertEquals(2,next.policy(true).generationThreads());
     }
     @Test public void invalidatedModeCheckpointRemainsInvalidAfterRestart() throws Exception {
         Path file=Files.createTempDirectory("lod-mode-checkpoint").resolve("done.bin");

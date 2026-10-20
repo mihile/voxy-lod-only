@@ -16,8 +16,11 @@ public final class LodOnlyConfig {
     public int cooldownTicks = 1;
     public int commitChunksPerTick = 64;
     public int generationThreads = 0;
-    public int generationTileSize = 32;
-    public int maxInFlightBatches = 2;
+    public int generationTileSize = 8;
+    public int maxInFlightBatches = 1;
+    public int resourceBudgetMiB = 192;
+    public int maxGenerationStepsPerSecond = 512;
+    public int automaticRetargetChunks = 8;
     public double commitBudgetMillis = 3;
     public double idleCommitBudgetMillis = 10;
     public double pauseAboveTickMillis = 45;
@@ -77,6 +80,10 @@ public final class LodOnlyConfig {
         } finally { Files.deleteIfExists(temporary); }
     }
     public void validate() {
+            if (resourceBudgetMiB < 128 || resourceBudgetMiB > 2048
+                    || maxGenerationStepsPerSecond < 1 || maxGenerationStepsPerSecond > 10000
+                    || automaticRetargetChunks < 1 || automaticRetargetChunks > 32)
+                throw new IllegalArgumentException("Invalid Voxy LOD Only resource budget");
             if (radiusChunks < 1 || radiusChunks > 128
                     || cooldownTicks < 1 || commitChunksPerTick < 1 || commitChunksPerTick > 64
                     || generationThreads < 0 || generationThreads > 8
@@ -112,7 +119,7 @@ public final class LodOnlyConfig {
         var p = playersPresent ? withPlayers : withoutPlayers;
         int threads = p.generationThreads == null ? generationThreads : p.generationThreads;
         return new Policy(enabled && p.enabled,
-                threads == 0 ? automaticWorkers(Runtime.getRuntime().availableProcessors(), playersPresent) : threads,
+                Math.min(playersPresent?2:4,threads == 0 ? automaticWorkers(Runtime.getRuntime().availableProcessors(), playersPresent) : threads),
                 p.cooldownTicks == null ? cooldownTicks : p.cooldownTicks,
                 p.commitChunksPerTick == null ? commitChunksPerTick : p.commitChunksPerTick,
                 p.commitBudgetMillis == null ? (playersPresent ? commitBudgetMillis : idleCommitBudgetMillis) : p.commitBudgetMillis,
@@ -126,7 +133,19 @@ public final class LodOnlyConfig {
         return policy(playersPresent).generationThreads();
     }
     static int automaticWorkers(int processors,boolean playersPresent) {
-        return Math.max(1,Math.min(8,processors-(playersPresent?1:0)));
+        return Math.max(1,Math.min(playersPresent?2:4,processors/4));
+    }
+    /** Conservative reservation estimate, not an assertion about third-party retained heap. */
+    static long estimatedBatchBytes(int tileSize) {
+        return estimatedBatchBytes(tileSize, tileSize, tileSize * tileSize);
+    }
+    static long estimatedBatchBytes(int spanX, int spanZ, int outputChunks) {
+        return ((long)(spanX+22)*(spanZ+22)+Math.max(1L,outputChunks))*128*1024 + 16L*1024*1024;
+    }
+    int effectiveTileSize(boolean occupied) {
+        int tile=Math.min(generationTileSize,occupied?8:16);
+        while(tile>4 && estimatedBatchBytes(tile)>resourceBudgetMiB*1024L*1024) tile/=2;
+        return tile;
     }
     public double activeCommitBudgetMillis(boolean playersPresent) {
         return policy(playersPresent).commitBudgetMillis();

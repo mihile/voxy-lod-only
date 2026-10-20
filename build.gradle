@@ -19,6 +19,12 @@ tasks.withType(JavaCompile).configureEach { options.release = 17; options.encodi
 java { withSourcesJar() }
 jar { from('LICENSE') }
 sourceSets {
+    flight {
+        java.srcDir 'verification/flight/java'
+        resources.srcDir 'verification/flight/resources'
+        compileClasspath += sourceSets.main.compileClasspath
+        runtimeClasspath += compileClasspath
+    }
     verification {
         java.srcDir 'verification/harness/java'
         resources.srcDir 'verification/harness/resources'
@@ -37,6 +43,19 @@ sourceSets {
         compileClasspath += sourceSets.main.compileClasspath
         runtimeClasspath += compileClasspath
     }
+}
+tasks.register('flightVerificationJar', Jar) {
+    dependsOn tasks.named('flightClasses')
+    archiveFileName = 'lod-flight-verification-dev.jar'
+    destinationDirectory = layout.buildDirectory.dir('verification')
+    from sourceSets.flight.output
+}
+tasks.register('remapFlightVerificationJar', net.fabricmc.loom.task.RemapJarTask) {
+    dependsOn tasks.named('flightVerificationJar')
+    inputFile = tasks.named('flightVerificationJar').flatMap { it.archiveFile }
+    archiveFileName = 'lod-flight-verification.jar'
+    destinationDirectory = layout.buildDirectory.dir('verification')
+    addNestedDependencies = false
 }
 tasks.register('verificationJar', Jar) {
     dependsOn tasks.named('verificationClasses')

@@ -1,5 +1,6 @@
 package dev.mihile.voxylodonly;
 
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
@@ -8,19 +9,22 @@ import java.util.*;
 public final class CompletionLedger {
     private static final int MAGIC = 0x564C4F31;
     private static final int LIMIT = 4_000_000;
-    private final Set<Long> completed = new HashSet<>();
+    private final LongOpenHashSet completed;
     private final Path file;
     private final long seed;
     public CompletionLedger(Path file, long seed) throws IOException {
         this.file = file; this.seed = seed;
         if (Files.exists(file)) {
-            try (var in = new DataInputStream(Files.newInputStream(file))) {
+            try (var in = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
                 if (in.readInt() != MAGIC) throw new IOException("Unknown checkpoint format");
-                if (in.readLong() != seed) return;
+                if (in.readLong() != seed) { this.completed = new LongOpenHashSet(); return; }
                 int count = in.readInt();
                 if (count < 0 || count > LIMIT || Files.size(file) != 16L + count * 8L) throw new IOException("Malformed checkpoint");
+                this.completed = new LongOpenHashSet(Math.max(16, count));
                 for (int i = 0; i < count; i++) completed.add(in.readLong());
             }
+        } else {
+            this.completed = new LongOpenHashSet();
         }
     }
     public boolean contains(long pos) { return completed.contains(pos); }
@@ -31,9 +35,11 @@ public final class CompletionLedger {
     public void save() throws IOException {
         Files.createDirectories(file.getParent());
         Path temp = file.resolveSibling(file.getFileName() + ".tmp");
-        try (var out = new DataOutputStream(Files.newOutputStream(temp))) {
-            out.writeInt(MAGIC); out.writeLong(seed); out.writeInt(completed.size());
-            for (long pos : completed.stream().sorted().toList()) out.writeLong(pos);
+        long[] positions = completed.toLongArray();
+        Arrays.sort(positions);
+        try (var out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(temp)))) {
+            out.writeInt(MAGIC); out.writeLong(seed); out.writeInt(positions.length);
+            for (long pos : positions) out.writeLong(pos);
         }
         for (int attempt = 0; ; attempt++) {
             try {

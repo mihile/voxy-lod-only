@@ -1,0 +1,58 @@
+{
+  "candidate_sha256": "553675445d5d1bd83e73e0bae4e85e224c94af06187fff559fc47ce0047bfe78",
+  "unit_tests": 37,
+  "unit_failures": 0,
+  "unit_errors": 0,
+  "fixtures": {
+    "full_server_and_accuracy": "build/isolated-20261016-042019",
+    "config_reload": "build/isolated-20261016-042430",
+    "manual_areas": "build/isolated-20261016-042547",
+    "modpack": "build/modpack-20261016-042702"
+  },
+  "tile_32_vs_8": {
+    "chunks": 32,
+    "voxels": 3145728,
+    "blocks_biomes_lighting_equal": true,
+    "structures": true,
+    "domain": "vanilla Overworld, seed 424242"
+  },
+  "serial_parallel": {
+    "tile_sizes": [
+      4,
+      8,
+      16,
+      32
+    ],
+    "dimensions": [
+      "overworld",
+      "nether"
+    ],
+    "voxels": 222822400,
+    "all_equal": true,
+    "crop_boundary_checks": 16
+  },
+  "conversion_sections": 384,
+  "remote_vanilla_region_files": [],
+  "modpack": {
+    "source_mods": 372,
+    "templates": 806,
+    "unchanged_other_template_NBT": true,
+    "structure_pieces": 80,
+    "structure_sha256": "2fed46429192fae4f04efd2650ec1ffc64486c97df971aceebffbbb3863f425a",
+    "historical_080_fixture": "build/modpack-20261013-194428",
+    "historical_source_inventory_identical": false,
+    "overworld_chunks_matching_historical_080": 9,
+    "overworld_chunks": 9,
+    "overworld_repeat_equal": 9,
+    "nether_repeat_equal": 4,
+    "nether_repeat_chunks": 9,
+    "nether_bitwise_equivalence_claimed": false,
+    "historical_other_source_inventory_identical": true,
+    "historical_installed_addon": [
+      {
+        "name": "VoxyLodOnly-0.8.0+1.20.1.jar",
+        "sha256": "0bd108194d4eec0eac0470be0f86040f79f3d1313f83b71c5f26ad7d3af1b247"
+      }
+    ]
+  }
+}
